@@ -1,0 +1,292 @@
+/* Reset and Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Crimson Text', Georgia, serif;
+    font-size: 18px;
+    line-height: 1.7;
+    color: #333;
+    background-color: #fff;
+}
+
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Header */
+.site-header {
+    padding: 60px 0 40px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 40px;
+}
+
+.site-title {
+    font-size: 2.5em;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.site-title a {
+    color: #333;
+    text-decoration: none;
+}
+
+.site-title a:hover {
+    color: #666;
+}
+
+.site-description {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.95em;
+    color: #888;
+    font-weight: 400;
+}
+
+/* Posts List */
+.posts-list {
+    margin-bottom: 60px;
+}
+
+.post-preview {
+    padding: 30px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.post-preview:last-child {
+    border-bottom: none;
+}
+
+.post-preview-title {
+    font-size: 1.6em;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.post-preview-title a {
+    color: #333;
+    text-decoration: none;
+}
+
+.post-preview-title a:hover {
+    color: #0066cc;
+}
+
+.post-preview-meta {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.85em;
+    color: #888;
+    margin-bottom: 12px;
+}
+
+.post-preview-date {
+    margin-right: 10px;
+}
+
+.post-preview-tags {
+    display: inline;
+}
+
+.tag {
+    display: inline-block;
+    padding: 2px 10px;
+    margin-right: 6px;
+    background-color: #f5f5f5;
+    border-radius: 12px;
+    font-size: 0.8em;
+    color: #666;
+}
+
+.post-preview-excerpt {
+    color: #555;
+    margin-top: 10px;
+}
+
+/* Individual Post */
+.post {
+    margin-bottom: 40px;
+}
+
+.post-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.post-title {
+    font-size: 2.2em;
+    font-weight: 600;
+    margin-bottom: 15px;
+    line-height: 1.3;
+}
+
+.post-meta {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.9em;
+    color: #888;
+}
+
+.post-content {
+    text-align: left;
+}
+
+.post-content h1,
+.post-content h2,
+.post-content h3,
+.post-content h4 {
+    font-weight: 600;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    line-height: 1.3;
+}
+
+.post-content h1 {
+    font-size: 1.8em;
+}
+
+.post-content h2 {
+    font-size: 1.5em;
+}
+
+.post-content h3 {
+    font-size: 1.3em;
+}
+
+.post-content p {
+    margin-bottom: 20px;
+}
+
+.post-content ul,
+.post-content ol {
+    margin-bottom: 20px;
+    margin-left: 30px;
+}
+
+.post-content li {
+    margin-bottom: 8px;
+}
+
+.post-content a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.post-content a:hover {
+    text-decoration: underline;
+}
+
+.post-content blockquote {
+    border-left: 3px solid #ddd;
+    padding-left: 20px;
+    margin: 25px 0;
+    color: #555;
+    font-style: italic;
+}
+
+.post-content code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    background-color: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.post-content pre {
+    background-color: #f8f8f8;
+    padding: 20px;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+
+.post-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.post-content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 25px auto;
+}
+
+.post-content hr {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 40px 0;
+}
+
+/* Navigation */
+.post-nav {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid #eee;
+}
+
+.back-link {
+    font-family: 'Lato', sans-serif;
+    color: #666;
+    text-decoration: none;
+    font-size: 0.95em;
+}
+
+.back-link:hover {
+    color: #0066cc;
+}
+
+/* Footer */
+.site-footer {
+    text-align: center;
+    padding: 40px 0;
+    border-top: 1px solid #eee;
+    margin-top: 60px;
+}
+
+.site-footer p {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.85em;
+    color: #888;
+}
+
+/* Loading State */
+.loading {
+    text-align: center;
+    color: #888;
+    padding: 40px 0;
+}
+
+/* Error State */
+.error {
+    text-align: center;
+    color: #cc0000;
+    padding: 40px 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .site-header {
+        padding: 40px 0 30px;
+    }
+
+    .site-title {
+        font-size: 2em;
+    }
+
+    .post-title {
+        font-size: 1.8em;
+    }
+
+    .post-preview-title {
+        font-size: 1.4em;
+    }
+
+    body {
+        font-size: 16px;
+    }
+}
