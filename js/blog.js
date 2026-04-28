@@ -4,7 +4,7 @@ const POSTS_DIRECTORY = 'posts/';
 // List of posts - add your posts here
 const posts = [
     {
-        filename: 'hello-world.md',
+        slug: 'hello-world',
         title: 'Hello World',
         date: '2025-04-27',
         tags: ['introduction', 'first-post']
@@ -105,7 +105,7 @@ async function loadPostsList() {
             // Try to load post to get excerpt
             let excerpt = '';
             try {
-                const response = await fetch(POSTS_DIRECTORY + post.filename);
+                const response = await fetch(`${POSTS_DIRECTORY}${post.slug}/index.md`);
                 if (response.ok) {
                     const text = await response.text();
                     const { content } = parseFrontMatter(text);
@@ -122,7 +122,7 @@ async function loadPostsList() {
             return `
                 <article class="post-preview">
                     <h2 class="post-preview-title">
-                        <a href="post.html?post=${encodeURIComponent(post.filename)}">${escapeHtml(post.title)}</a>
+                        <a href="post.html?post=${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a>
                     </h2>
                     <div class="post-preview-meta">
                         <span class="post-preview-date">${formatDate(post.date)}</span>
@@ -146,17 +146,17 @@ async function loadPostsList() {
 async function loadPost() {
     const container = document.getElementById('post-content');
 
-    // Get post filename from URL query parameter
+    // Get post slug from URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
-    const postFilename = urlParams.get('post');
+    const postSlug = urlParams.get('post');
 
-    if (!postFilename) {
+    if (!postSlug) {
         container.innerHTML = '<p class="error">No post specified. <a href="/">Go back home</a></p>';
         return;
     }
 
     try {
-        const response = await fetch(POSTS_DIRECTORY + postFilename);
+        const response = await fetch(`${POSTS_DIRECTORY}${postSlug}/index.md`);
 
         if (!response.ok) {
             throw new Error('Post not found');
@@ -166,7 +166,7 @@ async function loadPost() {
         const { frontMatter, content } = parseFrontMatter(text);
 
         // Get post metadata from front matter or posts list
-        const postInfo = posts.find(p => p.filename === postFilename) || {};
+        const postInfo = posts.find(p => p.slug === postSlug) || {};
         const title = frontMatter.title || postInfo.title || 'Untitled';
         const date = frontMatter.date || postInfo.date || '';
         const tags = frontMatter.tags || postInfo.tags || [];

@@ -14,11 +14,15 @@ I've built this blog using a simple, lightweight system that works directly on G
 
 To add a new blog post:
 
-1. Create a new `.md` file in the `posts/` folder
-2. Add front matter at the top with title, date, and tags
+1. Create a new folder in the `posts/` directory (e.g., `posts/my-post/`)
+2. Create `index.md` inside with front matter (title, date, tags)
 3. Write your content in Markdown below the front matter
-4. Add the post to the `posts` array in `js/blog.js`
-5. Commit and push to GitHub
+4. **Add images or files** to the same folder and reference them with `./`:
+   ```markdown
+   ![My Image](./screenshot.png)
+   ```
+5. Add the post to the `posts` array in `js/blog.js` using the folder name as `slug`
+6. Commit and push to GitHub
 
 ## Markdown Features
 

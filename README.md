@@ -12,8 +12,8 @@ A simple, elegant personal blog built with HTML, CSS, and vanilla JavaScript. No
 
 ## How to Add a New Post
 
-1. Create a new `.md` file in the `posts/` folder
-2. Add front matter at the top:
+1. Create a new folder in the `posts/` folder (e.g., `posts/my-new-post/`)
+2. Create `index.md` inside that folder with front matter at the top:
    ```yaml
    ---
    title: "Your Post Title"
@@ -22,17 +22,21 @@ A simple, elegant personal blog built with HTML, CSS, and vanilla JavaScript. No
    ---
    ```
 3. Write your content in Markdown below the front matter
-4. Open `js/blog.js` and add your post to the `posts` array:
+4. Add images or other files to the same folder and reference them with relative paths:
+   ```markdown
+   ![Description](./screenshot.png)
+   ```
+5. Open `js/blog.js` and add your post to the `posts` array:
    ```javascript
    {
-       filename: 'your-post.md',
+       slug: 'my-new-post',
        title: 'Your Post Title',
        date: '2025-04-27',
        tags: ['tag1', 'tag2']
    }
    ```
-5. Commit and push to GitHub
-6. Your post will appear automatically!
+6. Commit and push to GitHub
+7. Your post will appear automatically!
 
 ## File Structure
 
@@ -43,8 +47,10 @@ A simple, elegant personal blog built with HTML, CSS, and vanilla JavaScript. No
 │   └── style.css       # Blog styles
 ├── js/
 │   └── blog.js         # Blog logic and post list
-├── posts/              # Your blog posts (Markdown files)
-│   └── hello-world.md  # Example post
+├── posts/              # Your blog posts (each in its own folder)
+│   └── hello-world/    # Example post folder
+│       ├── index.md    # Post content
+│       └── image.png   # Post assets
 └── README.md           # This file
 ```
 
