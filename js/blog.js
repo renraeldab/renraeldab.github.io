@@ -165,6 +165,18 @@ async function loadPost() {
         const text = await response.text();
         const { frontMatter, content } = parseFrontMatter(text);
 
+        // Rewrite relative image paths to be absolute to the post directory
+        const postBaseUrl = `${POSTS_DIRECTORY}${postSlug}/`;
+        const processedContent = content.replace(
+            /!\[([^\]]*)\]\(([^)]+)\)/g,
+            (match, alt, url) => {
+                if (/^(https?:\/\/|\/)/.test(url)) {
+                    return match;
+                }
+                return `![${alt}](${postBaseUrl}${url})`;
+            }
+        );
+
         // Get post metadata from front matter or posts list
         const postInfo = posts.find(p => p.slug === postSlug) || {};
         const title = frontMatter.title || postInfo.title || 'Untitled';
@@ -172,7 +184,7 @@ async function loadPost() {
         const tags = frontMatter.tags || postInfo.tags || [];
 
         // Convert markdown to HTML
-        const htmlContent = marked.parse(content);
+        const htmlContent = marked.parse(processedContent);
 
         // Generate tags HTML
         const tagsHtml = tags && tags.length > 0
