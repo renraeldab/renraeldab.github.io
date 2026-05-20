@@ -1,5 +1,5 @@
 // Blog configuration
-const POSTS_DIRECTORY = 'posts/';
+const POSTS_DIRECTORY = '/posts/';
 
 // List of posts - add your posts here
 const posts = [
