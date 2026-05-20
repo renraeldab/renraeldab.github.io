@@ -4,10 +4,10 @@ const POSTS_DIRECTORY = 'posts/';
 // List of posts - add your posts here
 const posts = [
     {
-        slug: 'hello-world',
-        title: 'Hello World',
-        date: '2025-04-27',
-        tags: ['introduction', 'first-post']
+        slug: 'shadowrocket',
+        title: 'Setting Up a Shared Proxy with Shadowrocket',
+        date: '2026-05-20',
+        tags: ['shadowrocket', 'proxy', 'vpn']
     }
 ];
 
