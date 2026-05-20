@@ -22,7 +22,7 @@ I am the manager of this personal blog website. My responsibilities include revi
 │   └── hello-world/    # Example post folder
 │       ├── index.md    # Post content (MUST be named index.md)
 │       └── [assets]    # Images and other files
-└── README.md           # User-facing documentation
+└── README.md           # Visitor-facing description
 ```
 
 ## Post Registry
@@ -52,21 +52,6 @@ When reviewing a new post:
 - [ ] Images are in the same folder as index.md
 - [ ] Writing is clear and free of obvious errors
 - [ ] Date format is YYYY-MM-DD
-
-## Git Workflow
-
-After content review is complete:
-
-1. Stage changes: `git add -A`
-2. Commit with descriptive message:
-   ```
-   Add post: [Post Title]
-   
-   Brief description of changes.
-   
-   Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
-   ```
-3. Push: `git push`
 
 ## Markdown Conventions
 
@@ -99,9 +84,40 @@ After content review is complete:
 - Update this CLAUDE.md if conventions change
 - Update README.md if user-facing behavior changes
 
+## Git Workflow
+
+After content review is complete:
+
+1. Stage changes: `git add -A`
+2. Commit with descriptive message:
+   ```
+   Add post: [Post Title]
+
+   Brief description of changes.
+
+   Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+   ```
+3. Push: `git push`
+
 ## Technical Notes
 
 - Uses `marked` library (CDN) for markdown rendering
 - Front matter is parsed with custom regex in `parseFrontMatter()`
 - Posts are sorted by date (newest first) on homepage
 - URLs use query parameter: `post.html?post=hello-world`
+- `.nojekyll` disables Jekyll processing so raw `.md` files can be fetched
+
+## Customization Reference
+
+### Change the Blog Title / Subtitle
+
+Edit `index.html` and `post.html`:
+- Change `<title>` tag
+- Change `.site-title` text
+- Change `.site-description` text
+
+### Change Colors / Fonts
+
+Edit `css/style.css`:
+- Colors are defined throughout the file
+- Fonts are imported from Google Fonts at the top of HTML files
