@@ -20,79 +20,69 @@ single-distribution models would miss.
 
 ## Gaussian Mixture Models
 
-### definition
+A Gaussian Mixture Model (GMM) is a probabilistic model that assumes data are generated from a finite mixture of $k$ Gaussian components. Each component has its own mean $\mu_j$ and covariance $\Sigma_j$, and the overall distribution is a weighted combination of these individual Gaussians.
 
-$k$ components, $z$ is hidden state
+### Definition
 
-$$
-p(z = j) = \pi_j \\
-\sum_{j = 1}^k \pi_j = 1
-$$
-
-$x$ is observation conditioned on $z$, Gaussian distribution
+Let $z$ denote the hidden (latent) variable indicating which component generated a data point. The prior probability of belonging to component $j$ is
 
 $$
-p(x \mid z = j) = \mathcal{N}(x \mid \mu_j, \Sigma_j)
+p(z = j) = \pi_j, \text{ with } \sum_{j = 1}^k \pi_j = 1.
 $$
 
-together, the distribution is weighted sum
+Given $z = j$, the observed variable $x$ follows a Gaussian distribution parameterized by that component:
 
 $$
-p(x) = \sum_{j = 1}^k \pi_j \mathcal{N}(x \mid \mu_j, \Sigma_j)
+p(x \mid z = j) = \mathcal{N}(x \mid \mu_j, \Sigma_j).
 $$
 
-### generation vs observation
+Because $z$ is unobserved, the marginal distribution of $x$ is obtained by summing over all possible components, yielding a weighted sum of Gaussians:
 
-generative process:
-1. sample $z \sim p(z)$
-2. sample $x \mid z \sim p(x \mid z)$
+$$
+p(x) = \sum_{j = 1}^k \pi_j \, \mathcal{N}(x \mid \mu_j, \Sigma_j).
+$$
 
-we only observe $x$, not $z$
+### Generative Process vs. Observation
+
+We can view a GMM as defining a simple two-step generative process:
+
+1. First, sample a component assignment $z \sim p(z)$.
+2. Then, sample the observation conditioned on that assignment: $x \mid z \sim p(x \mid z)$.
+
+In practice, however, we only observe the data $x$; the latent assignments $z$ are hidden from us. We need to infer these hidden states and estimate the model parameters from observed data.
 
 ## Maximum Likelihood Parameter Estimation
 
-data $X = \{x_1, ..., x_n\}$
-
-assume $k$ clusters, each is a Gaussian distribution, cluster assignment $z_i \in \{1, ..., k\}$
-
-treat $z_i$ as a parameter and optimize it
-
-maximize joint log-likelihood of $(x_i, z_i)$
+Suppose we have a dataset $X = \{x_1, \dots, x_n\}$ drawn from a mixture of $k$ Gaussian distributions. If we knew the cluster assignment $z_i \in \{1, \dots, k\}$ for each data point, we could treat the assignments as parameters and maximize the joint log-likelihood of the complete data $(x_i, z_i)$:
 
 $$
 \underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n \log p(x_i, z_i)
-= \underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n (\log \pi_{z_i} + \log \mathcal{N}(x \mid \mu_{z_i}, \Sigma_{z_i}))
+= \underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n \bigl(\log \pi_{z_i} + \log \mathcal{N}(x_i \mid \mu_{z_i}, \Sigma_{z_i})\bigr).
 $$
 
-rewrite $z_i$ into a form similar to one-hot encoding
+To make the optimization more explicit, we can rewrite each $z_i$ using a one-hot encoding $z_{ij}$, where
 
 $$
 z_{ij} = \begin{cases}
-1 & z_i = j \\
-0 & \text{otherwise}
+1 & \text{if } z_i = j, \\
+0 & \text{otherwise}.
 \end{cases}
 $$
 
-for every $x_i$
+Since every data point must belong to exactly one cluster, we have $\sum_{j=1}^k z_{ij} = 1$ for each $i$. Using this representation, the mixture probability and Gaussian density for a single point can be expressed as products over all components:
 
 $$
-\sum_{j = 1}^k z_{ij} = 1
+\pi_{z_i} = \prod_{j = 1}^k \pi_j^{z_{ij}}, \qquad
+\mathcal{N}(x_i \mid \mu_{z_i}, \Sigma_{z_i}) = \prod_{j = 1}^k \mathcal{N}(x_i \mid \mu_j, \Sigma_j)^{z_{ij}}.
 $$
 
-after the transformation
+Substituting these into the objective gives a single double summation:
 
 $$
-\pi_{z_i} = \prod_{j = 1}^k \pi_j^{z_{ij}} \\
-\mathcal{N}(x \mid \mu_{z_i}, \Sigma_{z_i}) = \prod_{j = 1}^k \mathcal{N}(x \mid \mu_j, \Sigma_j)^{z_{ij}}
+\underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n \sum_{j = 1}^k z_{ij}\bigl(\log \pi_j + \log \mathcal{N}(x_i \mid \mu_j, \Sigma_j)\bigr).
 $$
 
-now we have
-
-$$
-\underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n \sum_{j = 1}^k z_{ij}(\log \pi_j + \log \mathcal{N}(x \mid \mu_j, \Sigma_j))
-$$
-
-however, we cannot maximize this directly
+Unfortunately, we cannot maximize this directly because the latent assignments $z_{ij}$ are unknown. Optimizing over both the parameters and the discrete assignments simultaneously leads to a combinatorial problem with many local optima.
 
 ## Expectation-Maximization
 
