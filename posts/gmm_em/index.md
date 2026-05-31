@@ -86,9 +86,9 @@ Unfortunately, we cannot maximize this directly because the latent assignments $
 
 ## Expectation-Maximization
 
-Expectation-Maximization (EM) algorithm is an iterative method for
+The Expectation-Maximization (EM) algorithm is an iterative method for
 finding maximum likelihood estimates (MLE) or maximum a posteriori (MAP)
-estimates when data contains latent (hidden) variables or is
+estimates when data contain latent (hidden) variables or are
 incomplete.
 
 ### Overview
@@ -96,26 +96,26 @@ incomplete.
 Given observed data $X$, latent variables $Z$, and parameters $\theta$, we
 want to maximize the observed-data log-likelihood:
 $$
-\log p(X \mid \theta) = \log \sum_{Z} p(X, Z \mid \theta)
+\log p(X \mid \theta) = \log \sum_{Z} p(X, Z \mid \theta).
 $$
 
-> there is a useful analogy
-> Complete-data MLE pretends we know something we don't — the latent assignments $z_i$. It optimizes $\log p(X, Z \mid \theta)$ directly. Observed-data MLE (what EM targets) is more principled: it integrates over that uncertainty via marginalization: $$\log p(X \mid \theta) = \log \sum_Z p(X, Z \mid \theta)$$
-> MLE makes a similar over-optimistic assumption about parameters. It treats all values of $\theta$ as equally plausible a priori and optimizes only the likelihood $p(X \mid \theta)$. MAP is more principled: it incorporates a prior $p(\theta)$ and optimizes the posterior: $$p(\theta \mid X) \propto p(X \mid \theta) , p(\theta)$$
-> In both cases, the naive method assumes away a source of uncertainty, while the principled method accounts for it probabilistically.
+Because the summation sits inside the logarithm, the parameters are tightly
+coupled and this objective is difficult to optimize directly. The key idea
+behind EM is to construct a tractable lower bound and maximize the bound
+instead.
 
-Introduce an arbitrary probability distribution $q(Z)$ over the latent
-variables with $q(Z) > 0$. We can rewrite:
+To derive that bound, introduce an arbitrary distribution $q(Z)$ over the latent
+variables. We can then rewrite:
 
 $$
 \log p(X \mid \theta) = \log \sum_{Z} q(Z) \frac{p(X, Z \mid \theta)}{q(Z)}
-= \log \mathbb{E}_Z[\frac{p(X, Z \mid \theta)}{q(Z)}]
+= \log \mathbb{E}_{q(Z)}\!\left[\frac{p(X, Z \mid \theta)}{q(Z)}\right].
 $$
 
-According to Jensen's Inequality, for a concave function $f$
+According to Jensen's inequality, for a concave function $f$,
 
 $$
-f(\mathbb{E}[X]) \ge \mathbb{E}[f(X)]
+f(\mathbb{E}[X]) \ge \mathbb{E}[f(X)].
 $$
 
 ![](jensens_inequality.png)
@@ -123,60 +123,68 @@ $$
 Since $\log$ is concave, we have:
 
 $$
-\log p(X \mid \theta) \ge \mathbb{E}_Z[\log \frac{p(X, Z \mid \theta)}{q(Z)}]
+\log p(X \mid \theta) \ge \mathbb{E}_{q(Z)}\!\left[\log \frac{p(X, Z \mid \theta)}{q(Z)}\right]
 = \sum_{Z} q(Z) \log \frac{p(X, Z \mid \theta)}{q(Z)}
-\triangleq \mathcal{L}(q, \theta)
+\triangleq \mathcal{L}(q, \theta).
 $$
 
-$\mathcal{L}(q, \theta)$ is called the **Evidence Lower BOund (ELBO)**.
-The gap between the true log-likelihood and the ELBO is a KL divergence:
+$\mathcal{L}(q, \theta)$ is called the **Evidence Lower Bound (ELBO)**.
+The gap between the true log-likelihood and the ELBO is the KL divergence:
 
-$$\log p(X|\theta) = \mathcal{L}(q, \theta) + \text{KL}\big(q(Z) \,\|\,
-p(Z|X,\theta)\big)$$
+$$\log p(X \mid \theta) = \mathcal{L}(q, \theta) + \mathrm{KL}\big(q(Z) \,\|\,
+p(Z \mid X, \theta)\big).$$
 
-Since $\text{KL} \geq 0$, maximizing $\mathcal{L}$ pushes us closer to
-maximizing $\log p(X|\theta)$.
+Since $\mathrm{KL} \geq 0$, maximizing $\mathcal{L}$ pushes us closer to
+maximizing $\log p(X \mid \theta)$.
 
 EM alternates between **tightening the bound** and **pushing it upward**.
 
 ### E-Step
 
-**Fix $\theta = \theta^{(t)}$. Maximize $\mathcal{L}(q, \theta^{(t)})$
-w.r.t $q(Z)$.**
+**Fix $\theta = \theta^{(t)}$ and maximize $\mathcal{L}(q, \theta^{(t)})$
+with respect to $q(Z)$.**
 From the KL decomposition, $\mathcal{L}$ is maximized when the KL
-divergence is zero:
-$$q(Z) = p(Z|X, \theta^{(t)})$$
+divergence vanishes:
+$$q(Z) = p(Z \mid X, \theta^{(t)}).$$
 This makes the bound **tight**: $\mathcal{L}(q, \theta^{(t)}) = \log
-p(X|\theta^{(t)})$.
-In practice, we don’t keep $q$ as a full distribution. Instead, we compute
-the **expected complete-data log-likelihood** (often called the $Q$-
-function):
-$$Q(\theta, \theta^{(t)}) = \mathbb{E}_{Z \sim p(Z|X,\theta^{(t)})} \big[
-\log p(X, Z|\theta) \big]$$
-*(The term $-\mathbb{E}[\log q(Z)]$ drops out in the M-step since it
-doesn’t depend on $\theta$.)*
+p(X \mid \theta^{(t)})$.
+In practice, we do not need to represent $q$ explicitly. Instead, we compute
+the **expected complete-data log-likelihood**, often called the $Q$-
+function:
+$$Q(\theta, \theta^{(t)}) = \mathbb{E}_{Z \sim p(Z \mid X,\theta^{(t)})} \big[
+\log p(X, Z \mid \theta) \big].$$
+Because the entropy term $-\mathbb{E}[\log q(Z)]$ does not depend on $\theta$,
+maximizing $\mathcal{L}$ over $\theta$ is equivalent to maximizing $Q$.
 
 ### M-Step
 
-**Fix $q(Z) = p(Z|X, \theta^{(t)})$. Maximize $\mathcal{L}(q, \theta)$
-w.r.t $\theta$.**
+**Fix $q(Z) = p(Z \mid X, \theta^{(t)})$ and maximize $\mathcal{L}(q, \theta)$
+with respect to $\theta$.**
 Since $q$ is fixed, maximizing $\mathcal{L}$ is equivalent to maximizing
-$Q(\theta, \theta^{(t)})$:
-$$\theta^{(t+1)} = \arg\max_{\theta} Q(\theta, \theta^{(t)})$$
-This is usually a standard MLE problem, but now the "data" includes soft
+the $Q$-function:
+$$\theta^{(t+1)} = \arg\max_{\theta} Q(\theta, \theta^{(t)}).$$
+This is usually a standard MLE problem, but the "data" now include soft
 assignments from the E-step.
 
 ### Monotonic Improvement
 
-Each EM iteration guarantees **non-decreasing observed log-likelihood**:
+Each EM iteration guarantees a **non-decreasing observed log-likelihood**, illustrated below:
+
+![](em_elbo.png)
+
 1. **E-step**: Tightens the lower bound to touch $\log
-p(X|\theta^{(t)})$.
+p(X \mid \theta^{(t)})$.
 2. **M-step**: Increases the lower bound to $\mathcal{L}(q,
 \theta^{(t+1)})$.
-3. Since the true likelihood is always $\geq$ the ELBO, we get:
-$$\log p(X|\theta^{(t)}) \leq \mathcal{L}(q, \theta^{(t+1)}) \leq \log
-p(X|\theta^{(t+1)})$$
-Thus, $\log p(X|\theta)$ climbs monotonically until convergence.
+3. Since the true likelihood is always at least the ELBO, we get:
+$$\log p(X \mid \theta^{(t)}) \leq \mathcal{L}(q, \theta^{(t+1)}) \leq \log
+p(X \mid \theta^{(t+1)}).$$
+Thus, $\log p(X \mid \theta)$ climbs monotonically until convergence.
+
+> Complete-data MLE pretends we know the latent
+> assignments $z_i$ and optimizes $\log p(X, Z \mid \theta)$ directly.
+> Observed-data MLE, which is what EM targets, instead integrates over that
+> uncertainty via marginalization.
 
 ## GMM EM
 
