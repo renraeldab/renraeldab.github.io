@@ -86,7 +86,7 @@ Unfortunately, we cannot maximize this directly because the latent assignments $
 
 ## Expectation-Maximization
 
-Expectation-Maximization (EM) algorithm** is an iterative method for
+Expectation-Maximization (EM) algorithm is an iterative method for
 finding maximum likelihood estimates (MLE) or maximum a posteriori (MAP)
 estimates when data contains latent (hidden) variables or is
 incomplete.
@@ -98,6 +98,11 @@ want to maximize the observed-data log-likelihood:
 $$
 \log p(X \mid \theta) = \log \sum_{Z} p(X, Z \mid \theta)
 $$
+
+> there is a useful analogy
+> Complete-data MLE pretends we know something we don't — the latent assignments $z_i$. It optimizes $\log p(X, Z \mid \theta)$ directly. Observed-data MLE (what EM targets) is more principled: it integrates over that uncertainty via marginalization: $$\log p(X \mid \theta) = \log \sum_Z p(X, Z \mid \theta)$$
+> MLE makes a similar over-optimistic assumption about parameters. It treats all values of $\theta$ as equally plausible a priori and optimizes only the likelihood $p(X \mid \theta)$. MAP is more principled: it incorporates a prior $p(\theta)$ and optimizes the posterior: $$p(\theta \mid X) \propto p(X \mid \theta) , p(\theta)$$
+> In both cases, the naive method assumes away a source of uncertainty, while the principled method accounts for it probabilistically.
 
 Introduce an arbitrary probability distribution $q(Z)$ over the latent
 variables with $q(Z) > 0$. We can rewrite:
@@ -112,6 +117,8 @@ According to Jensen's Inequality, for a concave function $f$
 $$
 f(\mathbb{E}[X]) \ge \mathbb{E}[f(X)]
 $$
+
+![](jensens_inequality.png)
 
 Since $\log$ is concave, we have:
 
@@ -130,11 +137,10 @@ p(Z|X,\theta)\big)$$
 Since $\text{KL} \geq 0$, maximizing $\mathcal{L}$ pushes us closer to
 maximizing $\log p(X|\theta)$.
 
-
-
-### ￿ 3. The Two Steps
 EM alternates between **tightening the bound** and **pushing it upward**.
-#### ￿ E-Step (Expectation)
+
+### E-Step
+
 **Fix $\theta = \theta^{(t)}$. Maximize $\mathcal{L}(q, \theta^{(t)})$
 w.r.t $q(Z)$.**
 From the KL decomposition, $\mathcal{L}$ is maximized when the KL
@@ -149,7 +155,9 @@ $$Q(\theta, \theta^{(t)}) = \mathbb{E}_{Z \sim p(Z|X,\theta^{(t)})} \big[
 \log p(X, Z|\theta) \big]$$
 *(The term $-\mathbb{E}[\log q(Z)]$ drops out in the M-step since it
 doesn’t depend on $\theta$.)*
-#### ￿ M-Step (Maximization)
+
+### M-Step
+
 **Fix $q(Z) = p(Z|X, \theta^{(t)})$. Maximize $\mathcal{L}(q, \theta)$
 w.r.t $\theta$.**
 Since $q$ is fixed, maximizing $\mathcal{L}$ is equivalent to maximizing
@@ -157,8 +165,9 @@ $Q(\theta, \theta^{(t)})$:
 $$\theta^{(t+1)} = \arg\max_{\theta} Q(\theta, \theta^{(t)})$$
 This is usually a standard MLE problem, but now the "data" includes soft
 assignments from the E-step.
----
-### ￿ 4. Why It Works (Monotonic Improvement)
+
+### Monotonic Improvement
+
 Each EM iteration guarantees **non-decreasing observed log-likelihood**:
 1. **E-step**: Tightens the lower bound to touch $\log
 p(X|\theta^{(t)})$.
@@ -168,22 +177,9 @@ p(X|\theta^{(t)})$.
 $$\log p(X|\theta^{(t)}) \leq \mathcal{L}(q, \theta^{(t+1)}) \leq \log
 p(X|\theta^{(t+1)})$$
 Thus, $\log p(X|\theta)$ climbs monotonically until convergence.
----
-### ￿￿ 5. Key Properties & Caveats
-| Property | Detail |
-|----------|--------|
-| **Convergence** | Guaranteed to converge to a **local optimum** (or
-saddle point) of the likelihood. |
-| **Global optimum** | Not guaranteed. Sensitive to initialization.
-Multiple random starts are common. |
-| **Tractability** | Requires: (1) closed-form or computable posterior
-$p(Z|X,\theta)$, (2) easy maximization of $Q$. |
-| **Speed** | Often slow near convergence (linear convergence rate).
-Accelerated variants exist. |
-| **Identifiability** | Label switching, degenerate solutions (e.g., zero
-variance in GMMs) can occur. |
----
-### ￿ 6. Canonical Example: Gaussian Mixture Models (GMM)
+
+## GMM EM
+
 - **Observed**: $X = \{x_1, \dots, x_N\}$
 - **Latent**: $z_n \in \{1,\dots,K\}$ (cluster assignment for $x_n$)
 - **Parameters**: $\theta = \{\pi_k, \mu_k, \Sigma_k\}_{k=1}^K$
@@ -197,12 +193,3 @@ $$\pi_k^{(t+1)} = \frac{1}{N}\sum_n \gamma_{nk}, \quad \mu_k^{(t+1)} =
 = \frac{\sum_n \gamma_{nk} (x_n-\mu_k^{(t+1)})(x_n-
 \mu_k^{(t+1)})^\top}{\sum_n \gamma_{nk}}$$
 Repeat until $\|\theta^{(t+1)} - \theta^{(t)}\| < \epsilon$.
----
-### ￿ Summary
-- **Goal**: Maximize $\log p(X|\theta)$ with latent $Z$.
-- **Trick**: Introduce $q(Z)$, use Jensen’s inequality to get ELBO.
-- **E-step**: Set $q(Z) = p(Z|X,\theta^{(t)})$ → compute expected
-complete log-likelihood.
-- **M-step**: Maximize that expectation w.r.t $\theta$.
-- **Result**: Monotonic likelihood increase, converges to a local
-optimum.
