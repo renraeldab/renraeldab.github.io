@@ -94,7 +94,8 @@ incomplete.
 ### Overview
 
 Given observed data $X$, latent variables $Z$, and parameters $\theta$, we
-want to maximize the observed-data log-likelihood:
+want to maximize the marginal log-likelihood of the observed data:
+
 $$
 \log p(X \mid \theta) = \log \sum_{Z} p(X, Z \mid \theta).
 $$
@@ -109,7 +110,7 @@ variables. We can then rewrite:
 
 $$
 \log p(X \mid \theta) = \log \sum_{Z} q(Z) \frac{p(X, Z \mid \theta)}{q(Z)}
-= \log \mathbb{E}_{q(Z)}\!\left[\frac{p(X, Z \mid \theta)}{q(Z)}\right].
+= \log \mathbb{E}_Z\!\left[\frac{p(X, Z \mid \theta)}{q(Z)}\right].
 $$
 
 According to Jensen's inequality, for a concave function $f$,
@@ -123,48 +124,101 @@ $$
 Since $\log$ is concave, we have:
 
 $$
-\log p(X \mid \theta) \ge \mathbb{E}_{q(Z)}\!\left[\log \frac{p(X, Z \mid \theta)}{q(Z)}\right]
-= \sum_{Z} q(Z) \log \frac{p(X, Z \mid \theta)}{q(Z)}
+\log p(X \mid \theta) \ge \mathbb{E}_Z\!\left[\log \frac{p(X, Z \mid \theta)}{q(Z)}\right]
 \triangleq \mathcal{L}(q, \theta).
 $$
 
 $\mathcal{L}(q, \theta)$ is called the **Evidence Lower Bound (ELBO)**.
-The gap between the true log-likelihood and the ELBO is the KL divergence:
 
-$$\log p(X \mid \theta) = \mathcal{L}(q, \theta) + \mathrm{KL}\big(q(Z) \,\|\,
-p(Z \mid X, \theta)\big).$$
+Why is this a lower bound? The gap between the true log-likelihood and the ELBO turns out to be exactly the KL divergence between $q(Z)$ and the posterior $p(Z \mid X, \theta)$. To see why, take the difference:
 
-Since $\mathrm{KL} \geq 0$, maximizing $\mathcal{L}$ pushes us closer to
-maximizing $\log p(X \mid \theta)$.
+$$
+\log p(X \mid \theta) - \mathcal{L}(q, \theta)
+= \mathbb{E}_Z\!\big[\log p(X \mid \theta)\big]
+- \mathbb{E}_Z\!\left[\log \frac{p(X, Z \mid \theta)}{q(Z)}\right].
+$$
 
-EM alternates between **tightening the bound** and **pushing it upward**.
+The first expectation is just $\log p(X \mid \theta)$, because it does not depend on $Z$. Using the chain rule $p(X, Z \mid \theta) = p(Z \mid X, \theta)\,p(X \mid \theta)$, we have $\log p(X, Z \mid \theta) = \log p(Z \mid X, \theta) + \log p(X \mid \theta)$. Substituting this in and simplifying:
+
+$$
+\begin{aligned}
+\log p(X \mid \theta) - \mathcal{L}(q, \theta)
+&= \mathbb{E}_Z\!\left[
+\log p(X \mid \theta)
+- \log p(Z \mid X, \theta)
+- \log p(X \mid \theta)
++ \log q(Z)
+\right] \\
+&= \mathbb{E}_Z\!\left[
+\log q(Z) - \log p(Z \mid X, \theta)
+\right] \\
+&= \mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big).
+\end{aligned}
+$$
+
+Rearranging gives the decomposition:
+
+$$
+\log p(X \mid \theta) = \mathcal{L}(q, \theta) + \mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big).
+$$
+
+The objective $\mathcal{L}(q, \theta)$ depends on two sets of variables: the model parameters $\theta$ and the distribution $q(Z)$. Optimizing them jointly is still difficult, but optimizing one while holding the other fixed is tractable. This suggests a coordinate-ascent strategy.
+
+If we fix $\theta$, then $\log p(X \mid \theta)$ is constant. From the decomposition above, maximizing $\mathcal{L}(q, \theta)$ with respect to $q$ is equivalent to minimizing $\mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big)$. Because a KL divergence is always non-negative, the minimum is $0$, achieved when $q(Z) = p(Z \mid X, \theta)$. Setting $q$ to the posterior makes the bound tight: $\mathcal{L}(q, \theta) = \log p(X \mid \theta)$.
+
+If we fix $q$, maximizing $\mathcal{L}(q, \theta)$ with respect to $\theta$ pushes the lower bound upward. Even though the bound may no longer be tight after $\theta$ changes, raising the bound is guaranteed to raise the true log-likelihood.
+
+EM therefore alternates between two steps:
+
+- **E-Step**: tightening the bound by optimizing $q$;
+- **M-Step**: pushing the bound upward by optimizing $\theta$.
+
+### $Q$-Function
+
+First, let us expand the ELBO:
+
+$$
+\mathcal{L}(q, \theta)
+= \mathbb{E}_Z\!\big[\log p(X, Z \mid \theta)\big] - \mathbb{E}_Z\!\big[\log q(Z)\big].
+$$
+
+The second term is the entropy of $q$, which does not depend on $\theta$ in the M-step because $q$ is fixed. Therefore, maximizing $\mathcal{L}$ with respect to $\theta$ is equivalent to maximizing only the first term.
+
+Also note that the KL divergence vanishes in the E-step to make the bound tight:
+
+$$
+q(Z) = p(Z \mid X, \theta^{(t)}).
+$$
+
+Therefore, our goal becomes maximizing an expected complete-data log-likelihood, called **$Q$-function**:
+
+$$
+Q(\theta, \theta^{(t)}) = \mathbb{E}_{Z \mid X,\theta^{(t)}} \big[\log p(X, Z \mid \theta) \big].
+$$
 
 ### E-Step
 
-**Fix $\theta = \theta^{(t)}$ and maximize $\mathcal{L}(q, \theta^{(t)})$
-with respect to $q(Z)$.**
-From the KL decomposition, $\mathcal{L}$ is maximized when the KL
-divergence vanishes:
-$$q(Z) = p(Z \mid X, \theta^{(t)}).$$
-This makes the bound **tight**: $\mathcal{L}(q, \theta^{(t)}) = \log
-p(X \mid \theta^{(t)})$.
-In practice, we do not need to represent $q$ explicitly. Instead, we compute
-the **expected complete-data log-likelihood**, often called the $Q$-
-function:
-$$Q(\theta, \theta^{(t)}) = \mathbb{E}_{Z \sim p(Z \mid X,\theta^{(t)})} \big[
-\log p(X, Z \mid \theta) \big].$$
-Because the entropy term $-\mathbb{E}[\log q(Z)]$ does not depend on $\theta$,
-maximizing $\mathcal{L}$ over $\theta$ is equivalent to maximizing $Q$.
+Fix $\theta = \theta^{(t)}$ and compute the $Q$-function.
+
+How do we evaluate this expectation when $Z$ appears inside the logarithm? Because the expectation is over $Z$, the latent variable is averaged outside the log. 
+For discrete $Z$, the expectation is a concrete weighted sum over all possible assignments:
+
+$$
+Q(\theta, \theta^{(t)}) = \sum_{Z} p(Z \mid X, \theta^{(t)}) \, \log p(X, Z \mid \theta).
+$$
+
+Each term evaluates $\log p(X, Z \mid \theta)$ at a particular assignment $Z$ and weights it by the posterior probability of that assignment. 
+We never need to manipulate $q$ as an abstract distribution; we only need these posterior probabilities to form the weighted sum.
 
 ### M-Step
 
-**Fix $q(Z) = p(Z \mid X, \theta^{(t)})$ and maximize $\mathcal{L}(q, \theta)$
-with respect to $\theta$.**
-Since $q$ is fixed, maximizing $\mathcal{L}$ is equivalent to maximizing
-the $Q$-function:
-$$\theta^{(t+1)} = \arg\max_{\theta} Q(\theta, \theta^{(t)}).$$
-This is usually a standard MLE problem, but the "data" now include soft
-assignments from the E-step.
+With $q(Z)$ fixed at the posterior from the E-step, maximize the $Q$-function with respect to $\theta$:
+
+$$
+\theta^{(t+1)} = \arg\max_{\theta} Q(\theta, \theta^{(t)}).
+$$
+
+This is usually a standard MLE problem, but the "data" now include soft assignments from the E-step.
 
 ### Monotonic Improvement
 
@@ -172,13 +226,27 @@ Each EM iteration guarantees a **non-decreasing observed log-likelihood**, illus
 
 ![](em_elbo.png)
 
-1. **E-step**: Tightens the lower bound to touch $\log
-p(X \mid \theta^{(t)})$.
-2. **M-step**: Increases the lower bound to $\mathcal{L}(q,
-\theta^{(t+1)})$.
-3. Since the true likelihood is always at least the ELBO, we get:
-$$\log p(X \mid \theta^{(t)}) \leq \mathcal{L}(q, \theta^{(t+1)}) \leq \log
-p(X \mid \theta^{(t+1)}).$$
+1. **E-step**: Tightens the lower bound to touch $\log p(X \mid \theta^{(t)})$, and constructs a better ELBO.
+2. **M-step**: Increases the lower bound to $\mathcal{L}(q, \theta^{(t+1)})$ (red arrows in the picture).
+
+After an iteration:
+
+$$
+\mathcal{L}(q, \theta^{(t+1)}) \geq \mathcal{L}(q, \theta^{(t)}) = \log p(X \mid \theta^{(t)})
+$$
+
+The gap between the true likelihood and the ELBO is a KL divergence, which is always non-negative. Therefore:
+
+$$
+\log p(X \mid \theta^{(t+1)}) = \mathcal{L}(q, \theta^{(t+1)}) + \underbrace{\mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta^{(t+1)})\big)}_{\geq 0} \geq \mathcal{L}(q, \theta^{(t+1)}).
+$$
+
+Chaining these together gives:
+
+$$
+\log p(X \mid \theta^{(t+1)}) \geq \log p(X \mid \theta^{(t)}).
+$$
+
 Thus, $\log p(X \mid \theta)$ climbs monotonically until convergence.
 
 > Complete-data MLE pretends we know the latent
@@ -186,18 +254,109 @@ Thus, $\log p(X \mid \theta)$ climbs monotonically until convergence.
 > Observed-data MLE, which is what EM targets, instead integrates over that
 > uncertainty via marginalization.
 
-## GMM EM
+## Applying EM to GMM
 
-- **Observed**: $X = \{x_1, \dots, x_N\}$
-- **Latent**: $z_n \in \{1,\dots,K\}$ (cluster assignment for $x_n$)
-- **Parameters**: $\theta = \{\pi_k, \mu_k, \Sigma_k\}_{k=1}^K$
-**E-step**: Compute *responsibilities* (posterior cluster probabilities):
-$$\gamma_{nk} = p(z_n=k | x_n, \theta^{(t)}) = \frac{\pi_k^{(t)}
-\mathcal{N}(x_n | \mu_k^{(t)}, \Sigma_k^{(t)})}{\sum_j \pi_j^{(t)}
-\mathcal{N}(x_n | \mu_j^{(t)}, \Sigma_j^{(t)})}$$
-**M-step**: Update parameters using weighted MLE:
-$$\pi_k^{(t+1)} = \frac{1}{N}\sum_n \gamma_{nk}, \quad \mu_k^{(t+1)} =
-\frac{\sum_n \gamma_{nk} x_n}{\sum_n \gamma_{nk}}, \quad \Sigma_k^{(t+1)}
-= \frac{\sum_n \gamma_{nk} (x_n-\mu_k^{(t+1)})(x_n-
-\mu_k^{(t+1)})^\top}{\sum_n \gamma_{nk}}$$
-Repeat until $\|\theta^{(t+1)} - \theta^{(t)}\| < \epsilon$.
+Now we return to the problem that opened this post: fitting a Gaussian Mixture Model. The general EM framework we just derived applies directly. 
+Our observed data are the points $X = \{x_1, \dots, x_N\}$, the latent variables are the cluster assignments $z_n \in \{1, \dots, K\}$, and the parameters are $\theta = \{\pi_k, \mu_k, \Sigma_k\}_{k=1}^K$.
+
+### E-Step: Compute Responsibilities
+
+For each point $x_n$, we compute the posterior probability that it was generated by component $k$. These are called **responsibilities**:
+
+$$
+\gamma_{nk} = p(z_n = k \mid x_n, \theta^{(t)}) = \frac{\pi_k^{(t)} \, \mathcal{N}(x_n \mid \mu_k^{(t)}, \Sigma_k^{(t)})}{\sum_{j=1}^K \pi_j^{(t)} \, \mathcal{N}(x_n \mid \mu_j^{(t)}, \Sigma_j^{(t)})}.
+$$
+
+### M-Step: Weighted Maximum Likelihood
+
+With the responsibilities fixed, maximizing the $Q$-function reduces to a weighted MLE update for each Gaussian component:
+
+$$
+\begin{aligned}
+N_k &= \sum_{n=1}^N \gamma_{nk}, \\[6pt]
+\pi_k^{(t+1)} &= \frac{N_k}{N}, \\[6pt]
+\mu_k^{(t+1)} &= \frac{1}{N_k} \sum_{n=1}^N \gamma_{nk} \, x_n, \\[6pt]
+\Sigma_k^{(t+1)} &= \frac{1}{N_k} \sum_{n=1}^N \gamma_{nk} \, (x_n - \mu_k^{(t+1)})(x_n - \mu_k^{(t+1)})^\top.
+\end{aligned}
+$$
+
+The algorithm alternates between these two steps until the log-likelihood or the parameters change by less than a small threshold $\epsilon$.
+
+### Implementation in NumPy
+
+Below is a compact, self-contained implementation using only NumPy.
+
+```python
+import numpy as np
+
+class GMM:
+    def __init__(self, n_components, max_iter=100, tol=1e-4):
+        self.K = n_components
+        self.max_iter = max_iter
+        self.tol = tol
+
+    def _gaussian_pdf(self, X, mu, Sigma):
+        d = X.shape[1]
+        det = np.linalg.det(Sigma)
+        inv = np.linalg.inv(Sigma)
+        diff = X - mu
+        exponent = -0.5 * np.sum(diff @ inv * diff, axis=1)
+        return np.exp(exponent) / np.sqrt((2 * np.pi) ** d * det)
+
+    def fit(self, X):
+        N, D = X.shape
+
+        # Initialize parameters
+        self.pi = np.ones(self.K) / self.K
+        self.mu = X[np.random.choice(N, self.K, replace=False)]
+        self.Sigma = np.array([np.eye(D) for _ in range(self.K)])
+
+        log_likelihoods = []
+
+        for _ in range(self.max_iter):
+            # --- E-step ---
+            gamma = np.zeros((N, self.K))
+            for k in range(self.K):
+                gamma[:, k] = self.pi[k] * self._gaussian_pdf(
+                    X, self.mu[k], self.Sigma[k]
+                )
+            gamma /= gamma.sum(axis=1, keepdims=True)
+
+            # --- M-step ---
+            Nk = gamma.sum(axis=0)
+            self.pi = Nk / N
+            for k in range(self.K):
+                self.mu[k] = (gamma[:, k][:, None] * X).sum(axis=0) / Nk[k]
+                diff = X - self.mu[k]
+                self.Sigma[k] = (gamma[:, k][:, None] * diff).T @ diff / Nk[k]
+                # Ridge for numerical stability
+                self.Sigma[k] += 1e-6 * np.eye(D)
+
+            # Compute observed log-likelihood
+            likelihood = np.zeros(N)
+            for k in range(self.K):
+                likelihood += self.pi[k] * self._gaussian_pdf(
+                    X, self.mu[k], self.Sigma[k]
+                )
+            log_likelihoods.append(np.sum(np.log(likelihood)))
+
+            if len(log_likelihoods) > 1:
+                if abs(log_likelihoods[-1] - log_likelihoods[-2]) < self.tol:
+                    break
+
+        return self
+
+    def predict(self, X):
+        gamma = np.zeros((X.shape[0], self.K))
+        for k in range(self.K):
+            gamma[:, k] = self.pi[k] * self._gaussian_pdf(
+                X, self.mu[k], self.Sigma[k]
+            )
+        return gamma.argmax(axis=1)
+```
+
+### Practical Notes
+
+*   **Initialization matters.** EM converges to a local optimum, so poor initialization can yield poor clusters. A common heuristic is to initialize the means with the centroids from a quick run of $K$-means.
+*   **Singular covariances.** If a component collapses onto a single point, its covariance matrix becomes singular. The small ridge term `1e-6 * np.eye(D)` prevents this.
+*   **Choosing $K$.** EM does not choose the number of components. In practice, $K$ is selected via cross-validation, the Bayesian Information Criterion (BIC), or domain knowledge.
