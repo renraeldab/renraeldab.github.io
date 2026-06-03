@@ -424,6 +424,14 @@ The scatter plot of Annual Income versus Spending Score reveals no simple linear
 2. **Elliptical Clusters.** K-Means assumes spherical clusters of equal size. The income vs. spending plot suggests clusters may be elongated or oriented at angles. GMM captures covariance structure, allowing for elliptical, variably-sized clusters.
 3. **Generative Model.** Because GMM models the data as a mixture of Gaussians, we can later generate synthetic customer profiles or compute the likelihood of new customers under the learned model.
 
+### First Attempt: 2D GMM
+
+We start with a simple two-feature model using Annual Income and Spending Score. After standardizing the features, we fit a GMM with $K=5$ and visualize the resulting clusters together with their 2-standard-deviation covariance ellipses.
+
+![](2d_first_attempt.png)
+
+The model captures several visible groupings, but it doesn't seem to make sense.
+
 ### Choosing the Number of Components
 
 A practical question when fitting a GMM is selecting the number of components $K$.
@@ -466,4 +474,143 @@ Because the denominator grows with $k$, CH penalizes overly complex models. For 
 > [!NOTE]
 > Silhouette and Calinski-Harabasz assume Euclidean geometry and crisp boundaries, whereas GMM uses Mahalanobis distances and soft assignments. While these metrics are still informative, they are not native to GMM. This is why we also rely heavily on likelihood-based criteria (AIC/BIC) derived directly from the model. Comparing all four criteria together gives a more robust basis for choosing $K$.
 
-*(Results and interpretation to be continued.)*
+#### Selecting the Best $K$
+
+We fit GMMs with $K = 2, \dots, 10$ and record AIC, BIC, silhouette score, and Calinski-Harabasz score for each.
+
+![](metrics_old_init.png)
+
+**Best $K$ by each metric:**
+- AIC: $K=10$
+- BIC: $K=5$
+- Silhouette: $K=3$
+- Calinski-Harabasz: $K=8$
+
+The four metrics do not agree. AIC favors complexity ($K=10$), while BIC penalizes it more strongly and settles on $K=5$. Silhouette prefers $K=3$, and Calinski-Harabasz prefers $K=8$. We select $K=5$ based on BIC, because BIC provides a stronger penalty for model complexity and is generally more reliable for GMM model selection.
+
+### Better Initialization with K-Means
+
+EM is guaranteed to improve the likelihood at each step, but only with respect to the starting point. Random initialization can land in poor local optima. A common remedy is to initialize the Gaussian means with K-Means centroids. Re-running the same $K$ sweep with K-means initialization gives:
+
+**Best $K$ by each metric (K-means init):**
+- AIC: $K=9$
+- BIC: $K=5$
+- Silhouette: $K=5$
+- Calinski-Harabasz: $K=5$
+
+With K-means initialization, three of the four metrics now agree on $K=5$. To see the qualitative difference, we compare the best $K=5$ models side by side.
+
+![](comparison_init.png)
+
+K-means initialization improves all four metrics at $K=5$:
+
+| Metric | Random Init | K-means Init |
+|--------|-------------|--------------|
+| AIC | 977.64 | 962.89 |
+| BIC | 1073.29 | 1058.54 |
+| Silhouette | 0.246 | 0.554 |
+| Calinski-Harabasz | 40.94 | 244.41 |
+
+Both AIC and BIC decrease, indicating a better fit with the same complexity. More dramatically, the Silhouette score more than doubles and Calinski-Harabasz increases six-fold. This confirms that K-means initialization helps EM converge to a much better local optimum with more coherent, well-separated clusters.
+
+### Extending to Four Dimensions
+
+So far we have used only Income and Spending Score. We now add Age and Gender to see whether richer features produce better clusters, again using K-means initialization.
+
+![](metrics_4d.png)
+
+**Best $K$ by each metric (4D, K-means init):**
+- AIC: $K=8$
+- BIC: $K=4$
+- Silhouette: $K=10$
+- Calinski-Harabasz: $K=10$
+
+BIC now selects $K=4$, suggesting the additional features do not justify more clusters. Because the 4D clusters cannot be visualized directly, we project the best model (by BIC, $K=4$) into the first three principal components.
+
+![](./4d_pca.png)
+
+Including more features changes the model but does not clearly improve it. The silhouette and Calinski-Harabasz scores are lower in 4D than in 2D at comparable $K$ values, indicating that the clusters are less well-separated when projected back to visualizable space.
+
+The 4D clusters are harder to interpret because Gender is binary and weakly informative, while Age introduces overlap with the existing Income-Spending structure. The final clusters still broadly separate customers, but the clean visual separability seen in the 2D Income vs Spending plot is lost. Therefore, for this dataset, the 2D model is more practical and interpretable.
+
+### Sensitivity to Outliers
+
+GMM is sensitive to outliers. The model uses maximum likelihood estimation with Gaussian distributions, which have light tails. Outliers can inflate covariance estimates and shift component means because the squared Mahalanobis distance penalizes outliers quadratically, but they still contribute to the likelihood. A single extreme outlier can distort an entire Gaussian component, pulling its mean toward the outlier and inflating its covariance.
+
+For this dataset, we should examine the data for outliers (e.g., using z-scores or visual inspection of boxplots) and consider one of the following:
+- **Robust preprocessing:** Remove or cap extreme values before fitting.
+- **Robust GMM variants:** Use t-distributions (t-mixture models) instead of Gaussians, which are more robust to outliers due to heavier tails.
+- **Down-weighting:** Apply weights to data points or use a trimmed likelihood approach.
+
+In the Mall Customers dataset, there are no extreme outliers, but customers with very high income and very low spending (or vice versa) can act as mild outliers. Standard scaling helps, but if the dataset were larger or noisier, explicit outlier handling would be advisable.
+
+### Complete Experiment Pipeline
+
+The full experiment can be reproduced with the following pipeline. It loads the data, defines the metrics and initialization helpers, and sweeps over $K$ for both the 2D and 4D settings.
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, calinski_harabasz_score
+from numpy_gmm import GMM
+
+np.random.seed(42)
+df = pd.read_csv("Mall_Customers.csv")
+
+# --- Prepare 2D and 4D feature matrices ---
+X_2d_raw = df[["Annual Income (k$)", "Spending Score (1-100)"]].values
+scaler_2d = StandardScaler()
+X_2d = scaler_2d.fit_transform(X_2d_raw)
+
+le = LabelEncoder()
+df["Gender_encoded"] = le.fit_transform(df["Gender"])
+X_4d_raw = df[["Age", "Annual Income (k$)", "Spending Score (1-100)", "Gender_encoded"]].values
+scaler_4d = StandardScaler()
+X_4d = scaler_4d.fit_transform(X_4d_raw)
+
+# --- Metric computation ---
+def compute_metrics(X, gmm, labels):
+    N, D = X.shape
+    K = gmm.K
+    likelihood = np.zeros(N)
+    for k in range(K):
+        likelihood += gmm.pi[k] * gmm._gaussian_pdf(X, gmm.mu[k], gmm.Sigma[k])
+    log_likelihood = np.sum(np.log(likelihood))
+    n_params = (K - 1) + K * D + K * D * (D + 1) // 2
+    aic = 2 * n_params - 2 * log_likelihood
+    bic = np.log(N) * n_params - 2 * log_likelihood
+    sil = silhouette_score(X, labels)
+    ch = calinski_harabasz_score(X, labels)
+    return {"K": K, "AIC": aic, "BIC": bic, "silhouette": sil, "calinski_harabasz": ch}
+
+# --- K-means initialization helper ---
+def kmeans_init(X, K):
+    km = KMeans(n_clusters=K, n_init=10, random_state=42)
+    km.fit(X)
+    return km.cluster_centers_
+
+# --- 2D: random init ---
+results_random = []
+for K in range(2, 11):
+    gmm = GMM(n_components=K, max_iter=200, tol=1e-4).fit(X_2d)
+    labels = gmm.predict(X_2d)
+    results_random.append(compute_metrics(X_2d, gmm, labels))
+
+# --- 2D: K-means init ---
+results_kmeans = []
+for K in range(2, 11):
+    gmm = GMM(n_components=K, max_iter=200, tol=1e-4,
+              init_means=kmeans_init(X_2d, K)).fit(X_2d)
+    labels = gmm.predict(X_2d)
+    results_kmeans.append(compute_metrics(X_2d, gmm, labels))
+
+# --- 4D: K-means init ---
+results_4d = []
+for K in range(2, 11):
+    gmm = GMM(n_components=K, max_iter=200, tol=1e-4,
+              init_means=kmeans_init(X_4d, K)).fit(X_4d)
+    labels = gmm.predict(X_4d)
+    results_4d.append(compute_metrics(X_4d, gmm, labels))
+```
