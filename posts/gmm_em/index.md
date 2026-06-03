@@ -249,7 +249,7 @@ $$
 
 Thus, $\log p(X \mid \theta)$ climbs monotonically until convergence.
 
-One caveat is that EM is only guaranteed to reach a *local* optimum, so initialization matters. A common heuristic is to seed the means with the centroids from a quick run of $K$-means. The algorithm can also converge arbitrarily slowly near saddle points or flat regions of the likelihood surface.
+One caveat is that EM is only guaranteed to reach a *local* optimum, so initialization matters. The algorithm can also converge arbitrarily slowly near saddle points or flat regions of the likelihood surface.
 
 ## Applying EM to GMM
 
@@ -384,3 +384,83 @@ class GMM:
         return gamma.argmax(axis=1)
 ```
 
+## Experiment: Mall Customer Segmentation
+
+To see how GMM performs on real data, we apply it to the [Mall Customer Segmentation dataset](https://www.kaggle.com/datasets/vjchoudhary7/customer-segmentation-tutorial-in-python), which contains demographic and behavioral information for 200 customers of a shopping mall.
+
+| Feature | Description |
+|---------|-------------|
+| `CustomerID` | Unique identifier (not predictive) |
+| `Gender` | Male or Female |
+| `Age` | Customer age in years |
+| `Annual Income (k$)` | Annual income in thousands of US dollars |
+| `Spending Score (1-100)` | Mall-assigned score based on spending behavior |
+
+The objective is **unsupervised customer segmentation**: grouping customers into distinct clusters based on similarities without predefined labels.
+
+### Exploratory Data Analysis
+
+| Statistic | Age | Annual Income (k$) | Spending Score (1-100) |
+|-----------|-----|--------------------|------------------------|
+| Mean | 38.85 | 60.56 | 50.20 |
+| Std | 13.97 | 26.26 | 25.82 |
+| Min | 18 | 15 | 1 |
+| Max | 70 | 137 | 99 |
+
+![](eda_distributions.png)
+
+The pairwise correlations in the heatmap are weak. If clusters exist, they are likely determined by interactions between variables rather than by any single dominant axis.
+
+![](eda_income_vs_spending.png)
+
+The scatter plot of Annual Income versus Spending Score reveals no simple linear relationship. Instead, customers appear to separate into distinct regions: high earners with low scores, low earners with high scores, and various intermediate groups. This suggests that **customer segments exist as overlapping clouds** rather than crisp, separable classes — exactly the scenario where GMM shines.
+
+**Why GMM for this problem?**
+
+1. **Soft Clustering.** K-Means assigns each point to exactly one cluster. In reality, a customer might sit on the boundary between two segments. GMM provides probabilistic memberships, acknowledging that uncertainty.
+2. **Elliptical Clusters.** K-Means assumes spherical clusters of equal size. The income vs. spending plot suggests clusters may be elongated or oriented at angles. GMM captures covariance structure, allowing for elliptical, variably-sized clusters.
+3. **Generative Model.** Because GMM models the data as a mixture of Gaussians, we can later generate synthetic customer profiles or compute the likelihood of new customers under the learned model.
+
+### Choosing the Number of Components
+
+A practical question when fitting a GMM is selecting the number of components $K$.
+
+#### Information Criteria: AIC and BIC
+
+For a model with $p$ parameters fit to $n$ samples, the information criteria are:
+
+$$
+\text{AIC} = 2p - 2\ln(\hat{L}), \qquad
+\text{BIC} = \ln(n)\,p - 2\ln(\hat{L}),
+$$
+
+where $\hat{L}$ is the maximized likelihood of the data. Both criteria reward likelihood while penalizing complexity; BIC imposes a heavier penalty and tends to favor simpler models. Lower is better.
+
+#### Silhouette Score
+
+For each sample, the silhouette coefficient compares its average distance to points in its own cluster (cohesion) with its average distance to the nearest neighboring cluster (separation). The overall score ranges from $-1$ to $+1$:
+
+- **$+1$**: the sample is far from neighboring clusters (well-clustered).
+- **$0$**: the sample lies near the boundary between two clusters.
+- **$-1$**: the sample may have been assigned to the wrong cluster.
+
+*Caveat:* Silhouette uses Euclidean distance. After standardizing features this is reasonable, but it may still favor spherical clusters even when GMM has learned an elongated covariance structure.
+
+#### Calinski-Harabasz Score
+
+Also known as the Variance Ratio Criterion, the Calinski-Harabasz (CH) score is the ratio of between-cluster dispersion to within-cluster dispersion:
+
+$$
+\text{CH} = \frac{\operatorname{tr}(B_k) / (k - 1)}{\operatorname{tr}(W_k) / (n - k)},
+$$
+
+where $B_k$ is the between-cluster scatter matrix, $W_k$ is the within-cluster scatter matrix, $k$ is the number of clusters, and $n$ is the number of samples. Higher values indicate better-defined clusters.
+
+Because the denominator grows with $k$, CH penalizes overly complex models. For a business use-case such as targeted marketing campaigns, you generally want a small number of interpretable segments; a high CH score at a moderate $k$ is a strong signal that you have found a good grouping.
+
+*Caveat:* Like silhouette, CH assumes Euclidean space and can be less reliable when clusters have very different densities or highly anisotropic covariances.
+
+> [!NOTE]
+> Silhouette and Calinski-Harabasz assume Euclidean geometry and crisp boundaries, whereas GMM uses Mahalanobis distances and soft assignments. While these metrics are still informative, they are not native to GMM. This is why we also rely heavily on likelihood-based criteria (AIC/BIC) derived directly from the model. Comparing all four criteria together gives a more robust basis for choosing $K$.
+
+*(Results and interpretation to be continued.)*
