@@ -320,13 +320,16 @@ class GMM:
         exponent = -0.5 * np.sum(diff @ inv * diff, axis=1)
         return np.exp(exponent) / np.sqrt((2 * np.pi) ** d * det)
 
-    def fit(self, X):
+    def fit(self, X, init_means=None):
         N, D = X.shape
 
-        # Initialize mixture weights uniformly and pick K random data points as means.
+        # Initialize mixture weights uniformly and by default pick K random data points as means.
         # In practice, K-means centroids give a better starting point.
         self.pi = np.ones(self.K) / self.K
-        self.mu = X[np.random.choice(N, self.K, replace=False)]
+        if init_means is not None:
+            self.mu = np.array(init_means)
+        else:
+            self.mu = X[np.random.choice(N, self.K, replace=False)]
         self.Sigma = np.array([np.eye(D) for _ in range(self.K)])
 
         log_likelihoods = []
