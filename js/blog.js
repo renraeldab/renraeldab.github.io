@@ -176,6 +176,42 @@ function extractMathBlocks(text) {
 }
 
 /**
+ * Convert GitHub-style markdown alerts (> [!NOTE], > [!WARNING], etc.)
+ * from regular blockquotes into styled alert divs.
+ */
+function convertAlerts(html) {
+    const alertTypes = ['NOTE', 'TIP', 'WARNING', 'CAUTION', 'IMPORTANT'];
+    const alertColors = {
+        NOTE: '#0969da',
+        TIP: '#1a7f37',
+        WARNING: '#9a6700',
+        CAUTION: '#cf222e',
+        IMPORTANT: '#8250df'
+    };
+    const typePattern = alertTypes.join('|');
+
+    // Pattern 1: Alert title and content in the same <p>
+    let result = html.replace(
+        new RegExp(`<blockquote>\\s*<p>\\[!(${typePattern})\\]\\s+(.*?)</p>\\s*</blockquote>`, 'gs'),
+        (match, type, content) => {
+            const color = alertColors[type] || '#0969da';
+            return `<div class="markdown-alert" style="border-left-color: ${color};"><p><strong>${type}:</strong> ${content}</p></div>`;
+        }
+    );
+
+    // Pattern 2: Alert title in its own <p>, followed by more paragraphs
+    result = result.replace(
+        new RegExp(`<blockquote>\\s*<p>\\[!(${typePattern})\\]\\s*</p>((?:\\s*<p>.*?</p>)+)\\s*</blockquote>`, 'gs'),
+        (match, type, content) => {
+            const color = alertColors[type] || '#0969da';
+            return `<div class="markdown-alert" style="border-left-color: ${color};"><p><strong>${type}:</strong></p>${content}</div>`;
+        }
+    );
+
+    return result;
+}
+
+/**
  * Restore LaTeX math blocks into HTML after markdown parsing.
  */
 function restoreMathBlocks(html, blocks) {
@@ -234,6 +270,9 @@ async function loadPost() {
 
         // Convert markdown to HTML
         let htmlContent = marked.parse(markdownWithPlaceholders);
+
+        // Convert GitHub-style alerts from plain blockquotes to styled blocks
+        htmlContent = convertAlerts(htmlContent);
 
         // Restore raw math blocks so KaTeX sees the original LaTeX
         htmlContent = restoreMathBlocks(htmlContent, mathBlocks);
