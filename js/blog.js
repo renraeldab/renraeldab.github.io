@@ -8,6 +8,12 @@ const posts = [
         title: 'Setting Up a Shared Proxy with Shadowrocket',
         date: '2026-05-20',
         tags: ['shadowrocket', 'proxy', 'vpn']
+    },
+    {
+        slug: 'gmm_em',
+        title: 'GMM and EM',
+        date: '2026-06-04',
+        tags: ['machine-learning']
     }
 ];
 

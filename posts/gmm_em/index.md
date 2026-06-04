@@ -1,11 +1,15 @@
 ---
 title: "GMM and EM"
-date: "none"
+date: "2026-06-04"
 tags: ["machine-learning"]
 ---
 
-Consider this hero level statistics from an RPG game: instead of an expected bell-shaped distribution, we observe a 
-bimodal distribution with high counts at both ends and a dip in the middle.
+> **TL;DR** — This post explains Gaussian Mixture Models and the Expectation-Maximization algorithm from the ground up, 
+> then applies them to a real customer segmentation problem. If you want to implement GMM from scratch, see the 
+> [NumPy implementation](#implementation-in-numpy); if you prefer a ready-to-use pipeline, see the [sklearn wrapper](#complete-experiment-pipeline).
+
+Consider this hero level statistics from an RPG game: instead of an expected bell-shaped distribution, we observe a
+ bimodal distribution with high counts at both ends and a dip in the middle.
 
 ![](rpg_heros.png)
 
