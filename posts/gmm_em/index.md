@@ -20,7 +20,9 @@ single-distribution models would miss.
 
 ## Gaussian Mixture Models
 
-A Gaussian Mixture Model (GMM) is a probabilistic model that assumes data are generated from a finite mixture of $k$ Gaussian components. Each component has its own mean $\mu_j$ and covariance $\Sigma_j$, and the overall distribution is a weighted combination of these individual Gaussians.
+A Gaussian Mixture Model (GMM) is a probabilistic model that assumes data are generated from a finite mixture of $k$ 
+Gaussian components. Each component has its own mean $\mu_j$ and covariance $\Sigma_j$, and the overall distribution is 
+a weighted combination of these individual Gaussians.
 
 ### Definition
 
@@ -49,7 +51,16 @@ We can view a GMM as defining a simple two-step generative process:
 1. First, sample a component assignment $z \sim p(z)$.
 2. Then, sample the observation conditioned on that assignment: $x \mid z \sim p(x \mid z)$.
 
-In practice, however, we only observe the data $x$; the latent assignments $z$ are hidden from us. We need to infer these hidden states and estimate the model parameters from observed data.
+In practice, however, we only observe the data $x$; the latent assignments $z$ are hidden from us. We need to infer these 
+hidden states and estimate the model parameters from observed data.
+
+### Sensitivity to Outliers
+
+GMM is sensitive to outliers. The model uses maximum likelihood estimation with Gaussian distributions, which have light tails. 
+Outliers can inflate covariance estimates and shift component means because the squared Mahalanobis distance penalizes outliers quadratically, 
+but they still contribute to the likelihood. A single extreme outlier can distort an entire Gaussian component, pulling its mean toward the outlier and inflating its covariance.
+
+![](gmm_outliers.png)
 
 ## Maximum Likelihood Parameter Estimation
 
@@ -82,31 +93,26 @@ $$
 \underset{\mu, \Sigma, z}{\mathrm{argmax}} \sum_{i = 1}^n \sum_{j = 1}^k z_{ij}\bigl(\log \pi_j + \log \mathcal{N}(x_i \mid \mu_j, \Sigma_j)\bigr).
 $$
 
-Unfortunately, we cannot maximize this directly because the latent assignments $z_{ij}$ are unknown. Optimizing over both the parameters and the discrete assignments simultaneously leads to a combinatorial problem with many local optima.
+Unfortunately, we cannot maximize this directly because the latent assignments $z_{ij}$ are unknown. Optimizing over 
+both the parameters and the discrete assignments simultaneously leads to a combinatorial problem with many local optima.
 
 ## Expectation-Maximization
 
-The Expectation-Maximization (EM) algorithm is an iterative method for
-finding maximum likelihood estimates (MLE) or maximum a posteriori (MAP)
-estimates when data contain latent (hidden) variables or are
-incomplete.
+The Expectation-Maximization (EM) algorithm is an iterative method for finding maximum likelihood estimates (MLE) or 
+maximum a posteriori (MAP) estimates when data contain latent (hidden) variables or are incomplete.
 
 ### Overview
 
-Given observed data $X$, latent variables $Z$, and parameters $\theta$, we
-want to maximize the marginal log-likelihood of the observed data:
+Given observed data $X$, latent variables $Z$, and parameters $\theta$, we want to maximize the marginal log-likelihood of the observed data:
 
 $$
 \log p(X \mid \theta) = \log \sum_{Z} p(X, Z \mid \theta).
 $$
 
-Because the summation sits inside the logarithm, the parameters are tightly
-coupled and this objective is difficult to optimize directly. The key idea
-behind EM is to construct a tractable lower bound and maximize the bound
-instead.
+Because the summation sits inside the logarithm, the parameters are tightly coupled and this objective is difficult to optimize directly. 
+The key idea behind EM is to construct a tractable lower bound and maximize the bound instead.
 
-To derive that bound, introduce an arbitrary distribution $q(Z)$ over the latent
-variables. We can then rewrite:
+To derive that bound, introduce an arbitrary distribution $q(Z)$ over the latent variables. We can then rewrite:
 
 $$
 \log p(X \mid \theta) = \log \sum_{Z} q(Z) \frac{p(X, Z \mid \theta)}{q(Z)}
@@ -130,7 +136,8 @@ $$
 
 $\mathcal{L}(q, \theta)$ is called the **Evidence Lower Bound (ELBO)**.
 
-Why is this a lower bound? The gap between the true log-likelihood and the ELBO turns out to be exactly the KL divergence between $q(Z)$ and the posterior $p(Z \mid X, \theta)$. To see why, take the difference:
+Why is this a lower bound? The gap between the true log-likelihood and the ELBO turns out to be exactly the KL divergence 
+between $q(Z)$ and the posterior $p(Z \mid X, \theta)$. To see why, take the difference:
 
 $$
 \log p(X \mid \theta) - \mathcal{L}(q, \theta)
@@ -138,7 +145,9 @@ $$
 - \mathbb{E}_Z\!\left[\log \frac{p(X, Z \mid \theta)}{q(Z)}\right].
 $$
 
-The first expectation is just $\log p(X \mid \theta)$, because it does not depend on $Z$. Using the chain rule $p(X, Z \mid \theta) = p(Z \mid X, \theta)\,p(X \mid \theta)$, we have $\log p(X, Z \mid \theta) = \log p(Z \mid X, \theta) + \log p(X \mid \theta)$. Substituting this in and simplifying:
+The first expectation is just $\log p(X \mid \theta)$, because it does not depend on $Z$. Using the chain rule 
+$p(X, Z \mid \theta) = p(Z \mid X, \theta)\,p(X \mid \theta)$, we have $\log p(X, Z \mid \theta) = \log p(Z \mid X, \theta) + \log p(X \mid \theta)$. 
+Substituting this in and simplifying:
 
 $$
 \begin{aligned}
@@ -162,11 +171,16 @@ $$
 \log p(X \mid \theta) = \mathcal{L}(q, \theta) + \mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big).
 $$
 
-The objective $\mathcal{L}(q, \theta)$ depends on two sets of variables: the model parameters $\theta$ and the distribution $q(Z)$. Optimizing them jointly is still difficult, but optimizing one while holding the other fixed is tractable. This suggests a coordinate-ascent strategy.
+The objective $\mathcal{L}(q, \theta)$ depends on two sets of variables: the model parameters $\theta$ and the distribution $q(Z)$. 
+Optimizing them jointly is still difficult, but optimizing one while holding the other fixed is tractable. This suggests a coordinate-ascent strategy.
 
-If we fix $\theta$, then $\log p(X \mid \theta)$ is constant. From the decomposition above, maximizing $\mathcal{L}(q, \theta)$ with respect to $q$ is equivalent to minimizing $\mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big)$. Because a KL divergence is always non-negative, the minimum is $0$, achieved when $q(Z) = p(Z \mid X, \theta)$. Setting $q$ to the posterior makes the bound tight: $\mathcal{L}(q, \theta) = \log p(X \mid \theta)$.
+If we fix $\theta$, then $\log p(X \mid \theta)$ is constant. From the decomposition above, maximizing $\mathcal{L}(q, \theta)$ 
+with respect to $q$ is equivalent to minimizing $\mathrm{KL}\big(q(Z) \,\|\, p(Z \mid X, \theta)\big)$. Because a KL divergence 
+is always non-negative, the minimum is $0$, achieved when $q(Z) = p(Z \mid X, \theta)$. Setting $q$ to the posterior makes the 
+bound tight: $\mathcal{L}(q, \theta) = \log p(X \mid \theta)$.
 
-If we fix $q$, maximizing $\mathcal{L}(q, \theta)$ with respect to $\theta$ pushes the lower bound upward. Even though the bound may no longer be tight after $\theta$ changes, raising the bound is guaranteed to raise the true log-likelihood.
+If we fix $q$, maximizing $\mathcal{L}(q, \theta)$ with respect to $\theta$ pushes the lower bound upward. Even though the 
+bound may no longer be tight after $\theta$ changes, raising the bound is guaranteed to raise the true log-likelihood.
 
 EM therefore alternates between two steps:
 
@@ -182,7 +196,8 @@ $$
 = \mathbb{E}_Z\!\big[\log p(X, Z \mid \theta)\big] - \mathbb{E}_Z\!\big[\log q(Z)\big].
 $$
 
-The second term is the entropy of $q$, which does not depend on $\theta$ in the M-step because $q$ is fixed. Therefore, maximizing $\mathcal{L}$ with respect to $\theta$ is equivalent to maximizing only the first term.
+The second term is the entropy of $q$, which does not depend on $\theta$ in the M-step because $q$ is fixed. Therefore, 
+maximizing $\mathcal{L}$ with respect to $\theta$ is equivalent to maximizing only the first term.
 
 Also note that the KL divergence vanishes in the E-step to make the bound tight:
 
@@ -249,13 +264,18 @@ $$
 
 Thus, $\log p(X \mid \theta)$ climbs monotonically until convergence.
 
-One caveat is that EM is only guaranteed to reach a *local* optimum, so initialization matters. The algorithm can also converge arbitrarily slowly near saddle points or flat regions of the likelihood surface.
+One caveat is that EM is only guaranteed to reach a *local* optimum, so initialization matters. The algorithm can also 
+converge arbitrarily slowly near saddle points or flat regions of the likelihood surface.
 
 ## Applying EM to GMM
 
-We can now return to the mixture model from the beginning of this post. In the "Maximum Likelihood Parameter Estimation" section, we wrote the complete-data log-likelihood using hard one-hot assignments $z_{ij}$, but optimizing over both the parameters and these discrete indicators leads to a combinatorial problem with many local optima. EM solves exactly this difficulty.
+We can now return to the mixture model from the beginning of this post. In the "Maximum Likelihood Parameter Estimation" section, 
+we wrote the complete-data log-likelihood using hard one-hot assignments $z_{ij}$, but optimizing over both the parameters and 
+these discrete indicators leads to a combinatorial problem with many local optima. EM solves exactly this difficulty.
 
-For a Gaussian Mixture Model, the observed data are $X = \{x_1, \dots, x_N\}$, the latent assignments are $z_n \in \{1, \dots, K\}$, and the parameters are $\theta = \{\pi_k, \mu_k, \Sigma_k\}_{k=1}^K$. Using the same one-hot encoding $z_{nk} \in \{0, 1\}$ with $\sum_{k=1}^K z_{nk} = 1$ that we introduced earlier, the complete-data log-likelihood is:
+For a Gaussian Mixture Model, the observed data are $X = \{x_1, \dots, x_N\}$, the latent assignments are $z_n \in \{1, \dots, K\}$, 
+and the parameters are $\theta = \{\pi_k, \mu_k, \Sigma_k\}_{k=1}^K$. Using the same one-hot encoding $z_{nk} \in \{0, 1\}$ with $\sum_{k=1}^K z_{nk} = 1$ 
+that we introduced earlier, the complete-data log-likelihood is:
 
 $$
 \log p(X, Z \mid \theta) = \sum_{n=1}^N \sum_{k=1}^K z_{nk} \bigl(\log \pi_k + \log \mathcal{N}(x_n \mid \mu_k, \Sigma_k)\bigr).
@@ -274,7 +294,8 @@ $$
 
 ### E-Step: Compute Responsibilities
 
-The E-step evaluates the expectations that appear in the $Q$-function above. Because $z_{nk}$ is an indicator, its conditional expectation is simply the posterior probability of belonging to component $k$:
+The E-step evaluates the expectations that appear in the $Q$-function above. Because $z_{nk}$ is an indicator, its conditional 
+expectation is simply the posterior probability of belonging to component $k$:
 
 $$
 \mathbb{E}_{Z \mid X,\theta^{(t)}}[z_{nk}] = p(z_n = k \mid x_n, \theta^{(t)}) = \frac{\pi_k^{(t)} \, \mathcal{N}(x_n \mid \mu_k^{(t)}, \Sigma_k^{(t)})}{\sum_{j=1}^K \pi_j^{(t)} \, \mathcal{N}(x_n \mid \mu_j^{(t)}, \Sigma_j^{(t)})}.
@@ -416,7 +437,9 @@ The pairwise correlations in the heatmap are weak. If clusters exist, they are l
 
 ![](eda_income_vs_spending.png)
 
-The scatter plot of Annual Income versus Spending Score reveals no simple linear relationship. Instead, customers appear to separate into distinct regions: high earners with low scores, low earners with high scores, and various intermediate groups. This suggests that **customer segments exist as overlapping clouds** rather than crisp, separable classes — exactly the scenario where GMM shines.
+The scatter plot of Annual Income versus Spending Score reveals no simple linear relationship. Instead, customers appear to separate into distinct regions: 
+high earners with low scores, low earners with high scores, and various intermediate groups. This suggests that **customer segments exist as overlapping clouds** 
+rather than crisp, separable classes — exactly the scenario where GMM shines.
 
 **Why GMM for this problem?**
 
@@ -426,7 +449,8 @@ The scatter plot of Annual Income versus Spending Score reveals no simple linear
 
 ### First Attempt: 2D GMM
 
-We start with a simple two-feature model using Annual Income and Spending Score. After standardizing the features, we fit a GMM with $K=5$ and visualize the resulting clusters together with their 2-standard-deviation covariance ellipses.
+We start with a simple two-feature model using Annual Income and Spending Score. After standardizing the features, we fit a GMM with $K=5$ and 
+visualize the resulting clusters together with their 2-standard-deviation covariance ellipses.
 
 ![](2d_first_attempt.png)
 
@@ -445,31 +469,39 @@ $$
 \text{BIC} = \ln(n)\,p - 2\ln(\hat{L}),
 $$
 
-where $\hat{L}$ is the maximized likelihood of the data. Both criteria reward likelihood while penalizing complexity; BIC imposes a heavier penalty and tends to favor simpler models. Lower is better.
+where $\hat{L}$ is the maximized likelihood of the data. Both criteria reward likelihood while penalizing complexity; 
+BIC imposes a heavier penalty and tends to favor simpler models. Lower is better.
 
 #### Silhouette Score
 
-For each sample, the silhouette coefficient compares its average distance to points in its own cluster (cohesion) with its average distance to the nearest neighboring cluster (separation). The overall score ranges from $-1$ to $+1$:
+For each sample, the silhouette coefficient compares its average distance to points in its own cluster (cohesion) with 
+its average distance to the nearest neighboring cluster (separation). The overall score ranges from $-1$ to $+1$:
 
 - **$+1$**: the sample is far from neighboring clusters (well-clustered).
 - **$0$**: the sample lies near the boundary between two clusters.
 - **$-1$**: the sample may have been assigned to the wrong cluster.
 
-*Caveat:* Silhouette uses Euclidean distance. After standardizing features this is reasonable, but it may still favor spherical clusters even when GMM has learned an elongated covariance structure.
+*Caveat:* Silhouette uses Euclidean distance. After standardizing features this is reasonable, but it may still favor 
+spherical clusters even when GMM has learned an elongated covariance structure.
 
 #### Calinski-Harabasz Score
 
-Also known as the Variance Ratio Criterion, the Calinski-Harabasz (CH) score is the ratio of between-cluster dispersion to within-cluster dispersion:
+Also known as the Variance Ratio Criterion, the Calinski-Harabasz (CH) score is the ratio of between-cluster dispersion 
+to within-cluster dispersion:
 
 $$
 \text{CH} = \frac{\operatorname{tr}(B_k) / (k - 1)}{\operatorname{tr}(W_k) / (n - k)},
 $$
 
-where $B_k$ is the between-cluster scatter matrix, $W_k$ is the within-cluster scatter matrix, $k$ is the number of clusters, and $n$ is the number of samples. Higher values indicate better-defined clusters.
+where $B_k$ is the between-cluster scatter matrix, $W_k$ is the within-cluster scatter matrix, $k$ is the number of 
+clusters, and $n$ is the number of samples. Higher values indicate better-defined clusters.
 
-Because the denominator grows with $k$, CH penalizes overly complex models. For a business use-case such as targeted marketing campaigns, you generally want a small number of interpretable segments; a high CH score at a moderate $k$ is a strong signal that you have found a good grouping.
+Because the denominator grows with $k$, CH penalizes overly complex models. For a business use-case such as targeted 
+marketing campaigns, you generally want a small number of interpretable segments; a high CH score at a moderate $k$ is 
+a strong signal that you have found a good grouping.
 
-*Caveat:* Like silhouette, CH assumes Euclidean space and can be less reliable when clusters have very different densities or highly anisotropic covariances.
+*Caveat:* Like silhouette, CH assumes Euclidean space and can be less reliable when clusters have very different 
+densities or highly anisotropic covariances.
 
 > [!NOTE]
 > Silhouette and Calinski-Harabasz assume Euclidean geometry and crisp boundaries, whereas GMM uses Mahalanobis distances and soft assignments. While these metrics are still informative, they are not native to GMM. This is why we also rely heavily on likelihood-based criteria (AIC/BIC) derived directly from the model. Comparing all four criteria together gives a more robust basis for choosing $K$.
@@ -486,11 +518,15 @@ We fit GMMs with $K = 2, \dots, 10$ and record AIC, BIC, silhouette score, and C
 - Silhouette: $K=3$
 - Calinski-Harabasz: $K=8$
 
-The four metrics do not agree. AIC favors complexity ($K=10$), while BIC penalizes it more strongly and settles on $K=5$. Silhouette prefers $K=3$, and Calinski-Harabasz prefers $K=8$. We select $K=5$ based on BIC, because BIC provides a stronger penalty for model complexity and is generally more reliable for GMM model selection.
+The four metrics do not agree. AIC favors complexity ($K=10$), while BIC penalizes it more strongly and settles on $K=5$. 
+Silhouette prefers $K=3$, and Calinski-Harabasz prefers $K=8$. We select $K=5$ based on BIC, because BIC provides a stronger 
+penalty for model complexity and is generally more reliable for GMM model selection.
 
 ### Better Initialization with K-Means
 
-EM is guaranteed to improve the likelihood at each step, but only with respect to the starting point. Random initialization can land in poor local optima. A common remedy is to initialize the Gaussian means with K-Means centroids. Re-running the same $K$ sweep with K-means initialization gives:
+EM is guaranteed to improve the likelihood at each step, but only with respect to the starting point. Random initialization 
+can land in poor local optima. A common remedy is to initialize the Gaussian means with K-Means centroids. Re-running the 
+same $K$ sweep with K-means initialization gives:
 
 **Best $K$ by each metric (K-means init):**
 - AIC: $K=9$
@@ -511,106 +547,139 @@ K-means initialization improves all four metrics at $K=5$:
 | Silhouette | 0.246 | 0.554 |
 | Calinski-Harabasz | 40.94 | 244.41 |
 
-Both AIC and BIC decrease, indicating a better fit with the same complexity. More dramatically, the Silhouette score more than doubles and Calinski-Harabasz increases six-fold. This confirms that K-means initialization helps EM converge to a much better local optimum with more coherent, well-separated clusters.
+Both AIC and BIC decrease, indicating a better fit with the same complexity. More dramatically, the Silhouette score more 
+than doubles and Calinski-Harabasz increases six-fold. This confirms that K-means initialization helps EM converge to a 
+much better local optimum with more coherent, well-separated clusters.
+
+> Why not just use K-means and stop there? K-means is excellent for finding a quick, rough partition of the data, which is why it works so well as an initializer. But it makes three restrictive assumptions that GMM relaxes:
+>
+> **1. Hard vs. Soft Clustering.** K-means assigns every point to exactly one cluster. GMM treats cluster membership as a probability: a customer can be 70 % in segment A and 30 % in segment B. This matters at boundaries, where forcing a hard assignment discards useful uncertainty.
+>
+> **2. Cluster Shape and Size.** K-means assumes clusters are spherical and equally sized because it minimizes Euclidean distance to centroids. GMM learns a full covariance matrix for each component, so it can capture elliptical, stretched, or variably-sized clusters.
+>
+> **3. Partitioning vs. Generative Modeling.** K-means is a distance-based partitioning algorithm: it slices the input space into Voronoi cells. GMM is a generative probabilistic model: it describes how the data could have been produced. That means you can compute the likelihood of new customers, sample synthetic profiles, or embed the model inside a larger probabilistic pipeline.
 
 ### Extending to Four Dimensions
 
 So far we have used only Income and Spending Score. We now add Age and Gender to see whether richer features produce better clusters, again using K-means initialization.
 
-![](metrics_4d.png)
+![](metrics_2d_4d_compare.png)
 
-**Best $K$ by each metric (4D, K-means init):**
-- AIC: $K=8$
-- BIC: $K=4$
-- Silhouette: $K=10$
-- Calinski-Harabasz: $K=10$
+Both AIC and BIC drop sharply once $K > 2$, and for every $K \geq 3$ the 4D model scores better than the 2D model on these likelihood-based criteria. 
+This suggests that the extra features do carry information that improves the probabilistic fit.
 
-BIC now selects $K=4$, suggesting the additional features do not justify more clusters. Because the 4D clusters cannot be visualized directly, we project the best model (by BIC, $K=4$) into the first three principal components.
+Because the 4D clusters cannot be visualized directly, we project the best model (by BIC, $K=4$) into the first three principal components.
 
-![](./4d_pca.png)
+![](4d_pca.png)
 
-Including more features changes the model but does not clearly improve it. The silhouette and Calinski-Harabasz scores are lower in 4D than in 2D at comparable $K$ values, indicating that the clusters are less well-separated when projected back to visualizable space.
+The four clusters appear well separated in PCA space, but a closer look reveals a problem: every cluster is long and narrow. 
+They form two distant pairs, and within each pair the two clusters lie very close together. A point at the sharp tip of one 
+cluster can actually be closer to the center of its neighbor than to its own center. This is exactly the geometry that silhouette 
+and Calinski-Harabasz penalize, so it is no surprise that these Euclidean-based metrics prefer the 2D model: by their standards, 
+4D with $K=4$ is worse than 2D with $K=5$.
 
-The 4D clusters are harder to interpret because Gender is binary and weakly informative, while Age introduces overlap with the existing Income-Spending structure. The final clusters still broadly separate customers, but the clean visual separability seen in the 2D Income vs Spending plot is lost. Therefore, for this dataset, the 2D model is more practical and interpretable.
+Which model should we choose? This is not a purely statistical question. If the mall wants the best possible probabilistic fit 
+and can afford tailored strategies for different segments, the 4D model is justified by AIC and BIC. If the marketing team needs 
+simple, actionable rules, the 2D model is far easier to explain: high or low income crossed with high or low spending score 
+naturally gives four quadrants, plus a middle group, for five clear customer types.
 
-### Sensitivity to Outliers
+The 4D clusters offer a different lens. Their centers are:
 
-GMM is sensitive to outliers. The model uses maximum likelihood estimation with Gaussian distributions, which have light tails. Outliers can inflate covariance estimates and shift component means because the squared Mahalanobis distance penalizes outliers quadratically, but they still contribute to the likelihood. A single extreme outlier can distort an entire Gaussian component, pulling its mean toward the outlier and inflating its covariance.
+| Cluster | Age | Annual Income (k$) | Spending Score (1-100) | Gender |
+|---------|-----|--------------------|------------------------|--------|
+| 1 | 41.6 | 57.5 | 39.2 | Female |
+| 2 | 28.1 | 62.2 | 72.0 | Male |
+| 3 | 29.6 | 63.4 | 81.3 | Female |
+| 4 | 49.2 | 62.3 | 29.7 | Male |
 
-For this dataset, we should examine the data for outliers (e.g., using z-scores or visual inspection of boxplots) and consider one of the following:
+Notice that income is almost the same across all four groups — close to the overall average. Instead of separating customers by wealth, 
+the 4D model partitions them by age, spending behavior, and gender. This is a valid but very different story from the 2D income-versus-spending view.
+
+Ultimately, the choice between 2D and 4D depends on what the business values more: simplicity and visual clarity, or a richer, more nuanced segmentation.
+
+### Outliers
+
+With only 200 customers, this dataset is small, so we should be cautious about labeling any point an outlier simply because it stands out from the rest. 
+A seemingly unusual customer — for example, someone with very high income and very low spending — might represent a legitimate but under-sampled segment in the population. 
+Removing it could erase a real customer group rather than clean the data.
+
+Still, it is worth examining the data for extreme values and considering one of the following strategies if the dataset were larger or noisier:
+
 - **Robust preprocessing:** Remove or cap extreme values before fitting.
 - **Robust GMM variants:** Use t-distributions (t-mixture models) instead of Gaussians, which are more robust to outliers due to heavier tails.
 - **Down-weighting:** Apply weights to data points or use a trimmed likelihood approach.
 
-In the Mall Customers dataset, there are no extreme outliers, but customers with very high income and very low spending (or vice versa) can act as mild outliers. Standard scaling helps, but if the dataset were larger or noisier, explicit outlier handling would be advisable.
-
 ### Complete Experiment Pipeline
 
-The full experiment can be reproduced with the following pipeline. It loads the data, defines the metrics and initialization helpers, and sweeps over $K$ for both the 2D and 4D settings.
+The following pipeline wraps `sklearn.mixture.GaussianMixture` into a reusable class that handles scaling, fitting, prediction, and metric collection.
 
 ```python
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score, calinski_harabasz_score
-from numpy_gmm import GMM
+import pandas as pd
+import numpy as np
 
-np.random.seed(42)
+
+class GMMPipeline:
+    def __init__(self, features, n_components, init="kmeans", random_state=42):
+        self.features = features
+        self.n_components = n_components
+        self.init = init
+        self.random_state = random_state
+        self.scaler = StandardScaler()
+        self.model = None
+
+    def _prepare(self, df, fit=False):
+        X = df[self.features].values
+        if fit:
+            return self.scaler.fit_transform(X)
+        return self.scaler.transform(X)
+
+    def fit(self, df):
+        X = self._prepare(df, fit=True)
+        self.model = GaussianMixture(
+            n_components=self.n_components,
+            covariance_type="full",
+            init_params=self.init,
+            random_state=self.random_state,
+            max_iter=200,
+        )
+        self.model.fit(X)
+        return self
+
+    def predict(self, df):
+        X = self._prepare(df)
+        return self.model.predict(X)
+
+    def metrics(self, df):
+        X = self._prepare(df)
+        labels = self.model.predict(X)
+        return {
+            "AIC": self.model.aic(X),
+            "BIC": self.model.bic(X),
+            "silhouette": silhouette_score(X, labels),
+            "calinski_harabasz": calinski_harabasz_score(X, labels),
+        }
+
+    def cluster_centers(self):
+        return pd.DataFrame(
+            self.scaler.inverse_transform(self.model.means_),
+            columns=self.features,
+        )
+
+
 df = pd.read_csv("Mall_Customers.csv")
 
-# --- Prepare 2D and 4D feature matrices ---
-X_2d_raw = df[["Annual Income (k$)", "Spending Score (1-100)"]].values
-scaler_2d = StandardScaler()
-X_2d = scaler_2d.fit_transform(X_2d_raw)
+# Encode Gender as a numeric feature
+df["Gender_encoded"] = df["Gender"].map({"Male": 0, "Female": 1})
 
-le = LabelEncoder()
-df["Gender_encoded"] = le.fit_transform(df["Gender"])
-X_4d_raw = df[["Age", "Annual Income (k$)", "Spending Score (1-100)", "Gender_encoded"]].values
-scaler_4d = StandardScaler()
-X_4d = scaler_4d.fit_transform(X_4d_raw)
+features = ["Age", "Annual Income (k$)", "Spending Score (1-100)", "Gender_encoded"]
 
-# --- Metric computation ---
-def compute_metrics(X, gmm, labels):
-    N, D = X.shape
-    K = gmm.K
-    likelihood = np.zeros(N)
-    for k in range(K):
-        likelihood += gmm.pi[k] * gmm._gaussian_pdf(X, gmm.mu[k], gmm.Sigma[k])
-    log_likelihood = np.sum(np.log(likelihood))
-    n_params = (K - 1) + K * D + K * D * (D + 1) // 2
-    aic = 2 * n_params - 2 * log_likelihood
-    bic = np.log(N) * n_params - 2 * log_likelihood
-    sil = silhouette_score(X, labels)
-    ch = calinski_harabasz_score(X, labels)
-    return {"K": K, "AIC": aic, "BIC": bic, "silhouette": sil, "calinski_harabasz": ch}
+pipeline = GMMPipeline(features=features, n_components=4)
+pipeline.fit(df)
 
-# --- K-means initialization helper ---
-def kmeans_init(X, K):
-    km = KMeans(n_clusters=K, n_init=10, random_state=42)
-    km.fit(X)
-    return km.cluster_centers_
-
-# --- 2D: random init ---
-results_random = []
-for K in range(2, 11):
-    gmm = GMM(n_components=K, max_iter=200, tol=1e-4).fit(X_2d)
-    labels = gmm.predict(X_2d)
-    results_random.append(compute_metrics(X_2d, gmm, labels))
-
-# --- 2D: K-means init ---
-results_kmeans = []
-for K in range(2, 11):
-    gmm = GMM(n_components=K, max_iter=200, tol=1e-4,
-              init_means=kmeans_init(X_2d, K)).fit(X_2d)
-    labels = gmm.predict(X_2d)
-    results_kmeans.append(compute_metrics(X_2d, gmm, labels))
-
-# --- 4D: K-means init ---
-results_4d = []
-for K in range(2, 11):
-    gmm = GMM(n_components=K, max_iter=200, tol=1e-4,
-              init_means=kmeans_init(X_4d, K)).fit(X_4d)
-    labels = gmm.predict(X_4d)
-    results_4d.append(compute_metrics(X_4d, gmm, labels))
+labels = pipeline.predict(df)
+print(pipeline.metrics(df))
+print(pipeline.cluster_centers())
 ```
