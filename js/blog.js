@@ -213,6 +213,32 @@ async function loadPost() {
         // Update page title
         document.title = `${title} - My Blog`;
 
+        // Ensure all headings have IDs so anchor links work
+        document.querySelectorAll('.post-content h1, .post-content h2, .post-content h3, .post-content h4, .post-content h5, .post-content h6').forEach(heading => {
+            if (!heading.id) {
+                heading.id = heading.textContent.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
+            }
+        });
+
+        // Render LaTeX math with KaTeX if available
+        if (typeof renderMathInElement !== 'undefined') {
+            renderMathInElement(document.querySelector('.post-content'), {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false
+            });
+        }
+
+        // Scroll to anchor if present in URL (needed because content loads dynamically)
+        if (window.location.hash) {
+            const el = document.getElementById(window.location.hash.slice(1));
+            if (el) {
+                el.scrollIntoView();
+            }
+        }
+
     } catch (error) {
         container.innerHTML = `<p class="error">Error loading post: ${escapeHtml(error.message)}</p>`;
     }
