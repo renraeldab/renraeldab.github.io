@@ -147,6 +147,46 @@ async function loadPostsList() {
 }
 
 /**
+ * Extract LaTeX math blocks from markdown so marked doesn't mangle backslashes.
+ * Returns { text: string with placeholders, blocks: Array<{placeholder, math}> }
+ */
+function extractMathBlocks(text) {
+    const blocks = [];
+    let id = 0;
+
+    function makePlaceholder() {
+        return `<!--MATH_BLOCK_${id++}-->`;
+    }
+
+    // Extract display math ($$...$$) first so inline regex doesn't match inside them
+    let result = text.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
+        const p = makePlaceholder();
+        blocks.push({ placeholder: p, math: match });
+        return p;
+    });
+
+    // Then extract inline math ($...$)
+    result = result.replace(/\$([^\$\n]+?)\$/g, (match) => {
+        const p = makePlaceholder();
+        blocks.push({ placeholder: p, math: match });
+        return p;
+    });
+
+    return { text: result, blocks };
+}
+
+/**
+ * Restore LaTeX math blocks into HTML after markdown parsing.
+ */
+function restoreMathBlocks(html, blocks) {
+    let result = html;
+    for (const { placeholder, math } of blocks) {
+        result = result.replace(placeholder, math);
+    }
+    return result;
+}
+
+/**
  * Load and display an individual post
  */
 async function loadPost() {
@@ -189,8 +229,14 @@ async function loadPost() {
         const date = frontMatter.date || postInfo.date || '';
         const tags = frontMatter.tags || postInfo.tags || [];
 
+        // Protect math blocks from markdown parsing
+        const { text: markdownWithPlaceholders, blocks: mathBlocks } = extractMathBlocks(processedContent);
+
         // Convert markdown to HTML
-        const htmlContent = marked.parse(processedContent);
+        let htmlContent = marked.parse(markdownWithPlaceholders);
+
+        // Restore raw math blocks so KaTeX sees the original LaTeX
+        htmlContent = restoreMathBlocks(htmlContent, mathBlocks);
 
         // Generate tags HTML
         const tagsHtml = tags && tags.length > 0
