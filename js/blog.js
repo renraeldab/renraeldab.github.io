@@ -155,7 +155,7 @@ function extractMathBlocks(text) {
     let id = 0;
 
     function makePlaceholder() {
-        return `<!--MATH_BLOCK_${id++}-->`;
+        return `<span data-math="${id++}"></span>`;
     }
 
     // Extract display math ($$...$$) first so inline regex doesn't match inside them
