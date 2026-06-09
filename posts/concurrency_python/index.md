@@ -207,6 +207,64 @@ Speedup relative to baseline:
   Asyncio + httpx: 13.51x
 ```
 
+### Race Conditions and Locks
+
+Because threads share memory, accessing shared mutable state without synchronization causes **race conditions**. A race 
+happens when two threads read a value, modify it, and write it back, overwriting each other's change.
+
+`threading.Lock` and `threading.Semaphore` are the basic tools to prevent this. A `Lock` allows only one thread at a time 
+to enter a critical section; a `Semaphore` allows a fixed number.
+
+```python
+import threading
+import time
+
+# Without lock
+counter = 0
+
+
+def unsafe_increment():
+    global counter
+    for _ in range(100000):
+        current = counter
+        time.sleep(0)   # Forces a context switch / GIL release
+        counter = current + 1
+
+
+threads = [threading.Thread(target=unsafe_increment) for _ in range(10)]
+for t in threads: t.start()
+for t in threads: t.join()
+print(f"Without lock: {counter}")
+
+# With lock
+counter = 0
+lock_ = threading.Lock()
+
+
+def safe_increment(lock):
+    global counter
+    for _ in range(100000):
+        with lock:
+            current = counter
+            time.sleep(0)   # Forces a context switch / GIL release
+            counter = current + 1
+
+
+threads = [threading.Thread(target=safe_increment, args=(lock_,)) for _ in range(10)]
+for t in threads: t.start()
+for t in threads: t.join()
+print(f"With lock: {counter}")
+```
+
+Results:
+
+```
+Without lock: 100029
+With lock: 1000000
+```
+
+Always protect shared mutable state with a lock. Even operations that look atomic are not thread-safe in Python.
+
 ## Asyncio — Massive I/O Concurrency
 
 ### Theory and Suitable Scenarios
@@ -246,7 +304,7 @@ import time
 from fastapi import FastAPI
 
 app = FastAPI()
-SLEEP_SECONDS = 0.1
+SLEEP_SECONDS = 0.5
 
 
 @app.get("/async")
@@ -274,8 +332,7 @@ import httpx
 
 URL_ASYNC = "http://127.0.0.1:9002/async"
 URL_SYNC = "http://127.0.0.1:9002/sync"
-TOTAL_REQUESTS = 300
-CONCURRENT_REQUESTS = 100
+TOTAL_REQUESTS = 100
 
 
 def start_server():
@@ -289,8 +346,9 @@ def start_server():
     )
     for _ in range(50):
         try:
-            httpx.get(URL_ASYNC, timeout=0.2)
-            break
+            r = httpx.get(URL_ASYNC, timeout=0.2)
+            if r.status_code == 200:
+                break
         except Exception:
             time.sleep(0.1)
     return proc
@@ -305,14 +363,8 @@ async def fetch_all(url):
         latencies.append(time.perf_counter() - start)
 
     async with httpx.AsyncClient() as client:
-        semaphore = asyncio.Semaphore(CONCURRENT_REQUESTS)
-
-        async def bounded_fetch():
-            async with semaphore:
-                await fetch(client)
-
         wall_start = time.perf_counter()
-        await asyncio.gather(*[bounded_fetch() for _ in range(TOTAL_REQUESTS)])
+        await asyncio.gather(*[fetch(client) for _ in range(TOTAL_REQUESTS)])
         wall_elapsed = time.perf_counter() - wall_start
     return latencies, wall_elapsed
 
@@ -321,7 +373,7 @@ async def benchmark():
     print("Starting server...")
     proc = start_server()
     try:
-        print(f"Firing {TOTAL_REQUESTS} requests ({CONCURRENT_REQUESTS} concurrent)\n")
+        print(f"Firing {TOTAL_REQUESTS} requests\n")
 
         latencies_async, elapsed_async = await fetch_all(URL_ASYNC)
         latencies_sync, elapsed_sync = await fetch_all(URL_SYNC)
@@ -349,22 +401,164 @@ Results:
 
 ```
 Async endpoint:
-  Total time  : 0.518s
-  Throughput  : 579.6 req/s
-  Mean latency: 146.9ms
-  P99 latency : 212.6ms
+  Total time  : 0.741s
+  Throughput  : 135.0 req/s
+  Mean latency: 690.9ms
+  P99 latency : 722.0ms
 
 Sync endpoint:
-  Total time  : 0.961s
-  Throughput  : 312.1 req/s
-  Mean latency: 269.1ms
-  P99 latency : 417.7ms
+  Total time  : 1.658s
+  Throughput  : 60.3 req/s
+  Mean latency: 1047.4ms
+  P99 latency : 1647.8ms
 ```
 
 **Why the difference?** A sync endpoint running in an async framework (FastAPI with Uvicorn) still runs in a thread pool. 
 With 100 concurrent requests, many threads are blocked in `time.sleep`. Once the pool saturates, new requests queue up, 
 spiking latency. The async endpoint never blocks a thread; it suspends the coroutine and lets the event loop handle all 
 requests on a tiny number of threads.
+
+### Shared State and Concurrency Limits
+
+Single-threaded cooperative scheduling does **not** eliminate race conditions. A coroutine can yield control at any `await`, 
+leaving shared state in an intermediate state for other coroutines to see. `asyncio.Lock` exists for the same reason as 
+`threading.Lock`: to prevent multiple tasks from interleaving read-modify-write operations on shared mutable state.
+
+A more common asyncio-specific hazard, however, is **unbounded concurrency**. Even when data races are unlikely, launching 
+thousands of simultaneous I/O operations can overwhelm downstream services, exhaust connection pools, or trigger rate limits. 
+`asyncio.Semaphore` is the standard tool for bounding concurrency: it allows a fixed number of coroutines to enter a critical 
+section while the rest wait.
+
+Consider a server that simulates a resource pool with a capacity of 3. We fire 12 concurrent requests at two endpoints — one 
+unbounded, one guarded by a semaphore.
+
+Server (`server.py`):
+
+```python
+import asyncio
+from fastapi import FastAPI
+
+app = FastAPI()
+active_requests = 0
+lock = asyncio.Lock()
+sem = asyncio.Semaphore(3)
+
+
+async def func():
+    global active_requests
+    async with lock:
+        active_requests += 1
+    await asyncio.sleep(0.2)
+    async with lock:
+        ret = {"active": active_requests}
+        active_requests -= 1
+    return ret
+
+
+@app.get("/unlimited")
+async def unlimited():
+    return await func()
+
+
+@app.get("/limited")
+async def limited():
+    async with sem:
+        return await func()
+```
+
+Benchmark (`benchmark.py`):
+
+```python
+import asyncio
+import pathlib
+import subprocess
+import sys
+import time
+
+import httpx
+
+URL_UNLIMITED = "http://127.0.0.1:9004/unlimited"
+URL_LIMITED = "http://127.0.0.1:9004/limited"
+TOTAL_REQUESTS = 12
+
+
+def start_server():
+    cwd = pathlib.Path(__file__).parent
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "server:app", "--port", "9004", "--log-level", "warning"],
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    for _ in range(50):
+        try:
+            r = httpx.get(URL_UNLIMITED, timeout=0.5)
+            if r.status_code == 200:
+                break
+        except Exception:
+            pass
+        time.sleep(0.1)
+    return proc
+
+
+async def fire_all(url):
+    async with httpx.AsyncClient() as client:
+        results = await asyncio.gather(*[client.get(url) for _ in range(TOTAL_REQUESTS)])
+    for response in results:
+        print(response.text)
+
+
+async def benchmark():
+    print("Starting server...")
+    proc = start_server()
+    try:
+        print(f"Firing {TOTAL_REQUESTS} requests at each endpoint\n")
+        print("--- unlimited ---")
+        await fire_all(URL_UNLIMITED)
+        print("--- limited ---")
+        await fire_all(URL_LIMITED)
+    finally:
+        proc.terminate()
+        proc.wait()
+
+
+if __name__ == "__main__":
+    asyncio.run(benchmark())
+```
+
+Results:
+
+```
+--- unlimited ---
+{"active":12}
+{"active":11}
+{"active":10}
+{"active":9}
+{"active":8}
+{"active":7}
+{"active":6}
+{"active":5}
+{"active":4}
+{"active":3}
+{"active":2}
+{"active":1}
+--- limited ---
+{"active":3}
+{"active":3}
+{"active":3}
+{"active":3}
+{"active":2}
+{"active":1}
+{"active":3}
+{"active":2}
+{"active":1}
+{"active":3}
+{"active":2}
+{"active":1}
+```
+
+Use `asyncio.Lock` when multiple coroutines mutate shared state. Use `asyncio.Semaphore` when you need to cap concurrent 
+access to an external resource — databases, APIs, or any service with a hard capacity limit.
 
 ## Multiprocessing — CPU-Bound Parallelism
 
