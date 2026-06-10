@@ -8,12 +8,24 @@
     <meta property="og:description" content="What I build and learn. Documentation and frontend by AI.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://renraeldab.github.io/">
+    <script>
+        (function() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <title>renraeldab blog</title>
     <link rel="stylesheet" href="css/style.css?v=1">
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Lato:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <header class="site-header">
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+            <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            <span>Dark</span>
+        </button>
         <div class="container">
             <h1 class="site-title"><a href="/">renraeldab blog</a></h1>
             <p class="site-description">What I build and learn.<br>Documentation and frontend by AI.</p>
