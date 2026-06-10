@@ -1,6 +1,6 @@
 ---
 title: "Concurrency in Python"
-date: "2026-06-00"
+date: "2026-06-10"
 tags: ["python", "concurrency", "async", "threading", "multiprocessing"]
 ---
 
@@ -801,6 +801,133 @@ When you call `.cuda()` and launch a kernel, the actual computation is performed
 CPU's job is merely to enqueue work into a **CUDA stream**. Because GPU execution is asynchronous with respect to the CPU, 
 a single Python thread can keep the GPU saturated by launching kernels fast enough. The bottleneck is rarely Python bytecode 
 execution; it is **keeping the GPU fed** with data and maximizing GPU utilization.
+
+### Inter-Process Communication in Practice
+
+Because processes have isolated memory, they cannot share Python objects directly. Any data that moves from one process 
+to another must cross a process boundary. Python's `multiprocessing` module offers three main mechanisms, each with different trade-offs.
+
+`Queue` and `Pipe`: message passing. `Queue` is the easiest way to move data between processes: it serializes objects with 
+`pickle`, sends them over a pipe, and deserializes them on the other side. It is simple and safe, but the `pickle` step 
+adds overhead that grows with data size.
+
+`shared_memory`: zero-copy sharing. For large arrays or buffers that every worker needs read access to, `multiprocessing.shared_memory` 
+creates a block of memory that exists outside any single process. Workers attach to it by name, so no copying occurs. This 
+is ideal when the payload is large and the per-task result is small.
+
+`Manager`: distributed objects. A `Manager` runs a server process that hosts Python objects (dicts, lists, namespaces) and 
+proxies access to them over sockets. It is convenient when you need mutable shared state, but slower than `Queue` or `shared_memory` 
+because every operation incurs IPC round-trips.
+
+To make the cost concrete, let's benchmark a CPU task that operates on a large array. We compare two approaches: passing 
+the array through `ProcessPoolExecutor.map` (which pickles it for every task) versus storing it once in `SharedMemory` and 
+passing only a lightweight name tag.
+
+```python
+import concurrent.futures
+import multiprocessing.shared_memory as sm
+import os
+import time
+
+import numpy as np
+
+NUM_TASKS = 20
+ARRAY_SHAPE = (10000000,)
+NUM_WORKERS = os.cpu_count() or 4
+
+
+def task_with_pickle(arr):
+    return float(arr.mean())
+
+
+def task_with_shared_memory(shm_name, shape, dtype):
+    existing_shm = sm.SharedMemory(name=shm_name)
+    arr = np.ndarray(shape, dtype=dtype, buffer=existing_shm.buf)
+    result = float(arr.mean())
+    existing_shm.close()
+    return result
+
+
+def run_pickle(arr):
+    start = time.perf_counter()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+        list(executor.map(task_with_pickle, [arr] * NUM_TASKS))
+    return time.perf_counter() - start
+
+
+def run_shared_memory(arr):
+    dtype = arr.dtype
+    shape = arr.shape
+    nbytes = arr.nbytes
+
+    shm = sm.SharedMemory(create=True, size=nbytes)
+    shared_arr = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+    shared_arr[:] = arr[:]
+
+    start = time.perf_counter()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
+        futures = [
+            executor.submit(task_with_shared_memory, shm.name, shape, dtype)
+            for _ in range(NUM_TASKS)
+        ]
+        concurrent.futures.wait(futures)
+    elapsed = time.perf_counter() - start
+
+    shm.close()
+    shm.unlink()
+    return elapsed
+
+
+def main():
+    arr = np.random.rand(*ARRAY_SHAPE).astype(np.float64)
+
+    t_pickle = run_pickle(arr)
+    t_shared = run_shared_memory(arr)
+
+    results = [
+        ("ProcessPool + pickle", t_pickle),
+        ("ProcessPool + shared_memory", t_shared),
+    ]
+
+    max_label = max(len(label) for label, _ in results)
+    print("-" * (max_label + 20))
+    print(f"{'Approach':<{max_label}} | {'Time (s)':>10}")
+    print("-" * (max_label + 20))
+    for label, elapsed in results:
+        print(f"{label:<{max_label}} | {elapsed:>10.4f}")
+    print("-" * (max_label + 20))
+
+    baseline = results[0][1]
+    print("\nSpeedup relative to baseline:")
+    for label, elapsed in results:
+        print(f"  {label}: {baseline / elapsed:.2f}x")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Results:
+
+```
+-----------------------------------------------
+Approach                    |   Time (s)
+-----------------------------------------------
+ProcessPool + pickle        |     1.8853
+ProcessPool + shared_memory |     0.1209
+-----------------------------------------------
+
+Speedup relative to baseline:
+  ProcessPool + pickle: 1.00x
+  ProcessPool + shared_memory: 15.59x
+```
+
+**Interpretation:** Sending the array through `pickle` twenty times dominates the runtime; the actual computation is trivial. 
+`SharedMemory` pays a small one-time cost to copy the array into shared RAM, after which every worker accesses it directly. 
+The speedup is dramatic.
+
+Use `Queue` or `Pipe` when data is small and you want simplicity. Use `shared_memory` when workers need read access to a 
+large payload. Use `Manager` only when you genuinely need cross-process mutable state and can tolerate the latency.
 
 ## Mixed Workloads — Putting It All Together
 

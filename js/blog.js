@@ -14,6 +14,12 @@ const posts = [
         title: 'GMM and EM',
         date: '2026-06-04',
         tags: ['machine-learning']
+    },
+    {
+        slug: 'concurrency_python',
+        title: 'Concurrency in Python',
+        date: '2026-06-10',
+        tags: ['python', 'concurrency', 'async', 'threading', 'multiprocessing']
     }
 ];
 
