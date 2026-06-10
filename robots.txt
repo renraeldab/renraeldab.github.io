@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://renraeldab.github.io/sitemap.xml

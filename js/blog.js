@@ -301,8 +301,10 @@ async function loadPost() {
             </div>
         `;
 
-        // Update page title
-        document.title = `${title} - My Blog`;
+        // Update page title and meta tags
+        const excerpt = createExcerpt(content, 160);
+        const postUrl = `https://renraeldab.github.io/post.html?post=${encodeURIComponent(postSlug)}`;
+        updateMetaTags(`${title} - renraeldab blog`, excerpt, postUrl);
 
         // Ensure all headings have IDs so anchor links work
         document.querySelectorAll('.post-content h1, .post-content h2, .post-content h3, .post-content h4, .post-content h5, .post-content h6').forEach(heading => {
@@ -333,6 +335,25 @@ async function loadPost() {
     } catch (error) {
         container.innerHTML = `<p class="error">Error loading post: ${escapeHtml(error.message)}</p>`;
     }
+}
+
+/**
+ * Update meta tags for SEO and Open Graph
+ */
+function updateMetaTags(title, description, url) {
+    document.title = title;
+
+    const descriptionMeta = document.querySelector('meta[name="description"]');
+    if (descriptionMeta) descriptionMeta.content = description;
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.content = title;
+
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) ogDescription.content = description;
+
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) ogUrl.content = url;
 }
 
 /**
