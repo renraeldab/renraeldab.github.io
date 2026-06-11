@@ -263,6 +263,61 @@ function restoreMathBlocks(html, blocks) {
 }
 
 /**
+ * Wrap code blocks with toolbar (copy + collapse/expand)
+ */
+function enhanceCodeBlocks() {
+    document.querySelectorAll('.post-content pre').forEach(pre => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+
+        const needsCollapse = pre.scrollHeight > 300;
+        if (needsCollapse) {
+            wrapper.classList.add('collapsed');
+        }
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'code-block-toolbar';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', async () => {
+            const code = pre.querySelector('code');
+            const text = code ? code.textContent : pre.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                copyBtn.textContent = 'Copied';
+                setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+            } catch {
+                copyBtn.textContent = 'Failed';
+                setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+            }
+        });
+        toolbar.appendChild(copyBtn);
+
+        if (needsCollapse) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.textContent = 'Expand';
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = wrapper.classList.contains('collapsed');
+                wrapper.classList.toggle('collapsed');
+                toggleBtn.textContent = isCollapsed ? 'Collapse' : 'Expand';
+            });
+            toolbar.appendChild(toggleBtn);
+        }
+
+        const fade = document.createElement('div');
+        fade.className = 'code-block-fade';
+
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(toolbar);
+        wrapper.appendChild(pre);
+        wrapper.appendChild(fade);
+
+        pre.style.marginBottom = '0';
+    });
+}
+
+/**
  * Load and display an individual post
  */
 async function loadPost() {
@@ -357,6 +412,9 @@ async function loadPost() {
                 throwOnError: false
             });
         }
+
+        // Add copy and collapse buttons to code blocks
+        enhanceCodeBlocks();
 
         // Scroll to anchor if present in URL (needed because content loads dynamically)
         if (window.location.hash) {
