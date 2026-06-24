@@ -1,16 +1,28 @@
 ---
-title: ""
-date: "2026-06-"
-tags: []
+title: "PixelRAG: How Does Image-Based Retrieval Compare to Text RAG?"
+date: "2026-06-25"
+tags: ["RAG", "embedding"]
 ---
 
-learning process and insights about PixelRAG
+[PixelRAG](https://github.com/StarTrail-org/PixelRAG) is a project that renders documents as screenshots and retrieves over 
+the images directly instead of parsing text. One claim is that this approach preserves visual structure, tables, charts, page 
+layout, that text-based RAG may throw away, and that it can be more token-efficient. In this post, we dig in: try the public API, 
+build an index locally, and compare it against a traditional text-based RAG pipeline.
 
-## PixelRAG
+## What is PixelRAG?
 
-...
+PixelRAG is a retrieval system that takes a different approach to document indexing. Instead of extracting text from web pages 
+or PDFs, it renders them as screenshot tiles and embeds those images directly. The key insight is that images carry semantic 
+information that can get lost when you convert everything to plain text.
 
-## API
+Two pieces make this work:
+
+1. **Rendering pipeline**: Converts documents (web pages, PDFs, images) into screenshot tiles.
+2. **Vision-language embedding model**: `Qwen/Qwen3-VL-Embedding-2B`, embeds these page images into a retrievable vector space.
+
+## Trying the Public API
+
+PixelRAG hosts a public API at `pixelrag.ai`. Here is a few quick queries to see how it behaves.
 
 ### Text Query
 
@@ -74,7 +86,8 @@ curl -s -X POST https://pixelrag.ai/api/search \
 }
 ```
 
-The text query successfully retrieved [the correct Wikipedia article](https://en.wikipedia.org/wiki/Tasmania) as the top result with a score of 0.625.
+The text query successfully retrieved [the correct Wikipedia article](https://en.wikipedia.org/wiki/Tasmania) as the top result 
+with a score of 0.625.
 
 ### Fetching a Result Tile
 
@@ -88,9 +101,14 @@ curl -s https://pixelrag.ai/api/tile/7234200/0/0 --output result_tile_tasmania.p
 
 ![](result_tile_tasmania.png)
 
-The result is a PNG image file (875 x 1024 pixels) containing a screenshot tile of the Tasmania Wikipedia page. This confirms that the API returns actual rendered page screenshots as retrievable units.
+The result is a PNG image file (875 x 1024 pixels) containing a screenshot tile of the Tasmania Wikipedia page. This confirms 
+that the API returns actual rendered page screenshots as retrievable units.
 
 ### Image Query
+
+Querying with an image is also possible. Let's use a screenshot of the Tasmania Wikipedia page instead of text.
+
+![](tasmania.png)
 
 **Input:**
 
@@ -99,8 +117,6 @@ curl -s -X POST https://pixelrag.ai/api/search \
   -H "Content-Type: application/json" \
   -d "{\"queries\": [{\"image\": \"$(base64 < tasmania.png | tr -d '\n')\"}], \"n_docs\": 3}"
 ```
-
-![](tasmania.png)
 
 **Output:**
 
@@ -158,43 +174,14 @@ The image query did not return the Tasmania article. Instead, it retrieved visua
 
 ![](result_tile_incorrect.png)
 
-## PixelRAG build index
+## Building a PixelRAG Index Locally
 
-### bug report
+> [!NOTE]
+> The package version is 0.3.0 at the time of writing, which has a bug while using `source.type: local`. `LocalSource` uses 
+> the raw file stem as the document ID, but `build()` later assumes every document ID is an integer. If your filenames are 
+> not valid integers, the pipeline crashes with `ValueError: invalid literal for int() with base 10`.
 
-version of PixelRAG: 0.3.0
-Symptom: ValueError: invalid literal for int() with base 10
-Affected module: pixelrag_index.pipelines
-Trigger: Using source.type: local with files whose stems are not valid integers
-
-Root cause
-1. LocalSource uses the raw file stem as the document ID
-```python
-# pixelrag_index/sources/local.py:30-41
-            if ftype == "web":
-                yield Document(
-                    id=f.stem,
-                    url=f"file://{f.resolve()}",
-                    metadata={"type": ftype},
-                )
-            else:
-                yield Document(
-                    id=f.stem,
-                    path=str(f),
-                    metadata={"type": ftype},
-                )
-```
-
-2. build() assumes every document ID is an integer
-```python
-# pixelrag_index/pipelines.py:103-106
-    max_idx = max(int(a["id"]) for a in articles) + 1 if articles else 0
-    article_entries = [{"title": "", "url": ""}] * max_idx
-    for a in articles:
-        idx = int(a["id"])
-```
-
-### code
+Here is the wrapper to build the index:
 
 ```python
 import shutil
@@ -287,9 +274,10 @@ def build_index(
     return result
 ```
 
-### concepts and logics
+### Pipeline Concepts
 
-PixelRAG's pipeline has four stages: **render -> chunk -> embed -> index**. The relationship between tiles, chunks, and vectors depends on the document type.
+PixelRAG's pipeline has four stages: **render → chunk → embed → index**. The relationship between tiles, chunks, and vectors 
+depends on the document type.
 
 #### For HTML / Web Pages
 
@@ -299,22 +287,21 @@ PixelRAG's pipeline has four stages: **render -> chunk -> embed -> index**. The 
 
 #### For PDFs
 
-1. **Render**: `pdf2image` (poppler) renders each PDF page to a JPEG at **200 DPI**. Each page becomes its own tile.
+1. **Render**: `pdf2image` (Poppler) renders each PDF page to a JPEG at **200 DPI**. Each page becomes its own tile.
 2. **Chunk**: Each PDF page is treated as exactly one chunk because a page is considered a natural semantic unit.
 3. **Embed**: Each page (page = tile = chunk) becomes one vector.
 
-## Traditional RAG build index
+## Building a Traditional RAG Index Locally
 
-taking screenshots is easy, while extracting and chunking text is tricky
-note that we implement basic RAG here, and fancy tricks are not in the scope of this post
+For a fair comparison, we should build a standard text-based RAG index on the same documents. In many ways, taking screenshots 
+is the easy solution; extracting and chunking text well is tricky. Let's stick to a basic implementation, and advanced tricks are 
+out of scope for this post.
 
-### parsing documents
+### Parsing Documents
 
-we only take care of html and pdf in this post
+#### HTML
 
-#### html
-
-we extract text and throw away other information, such as the position of text
+For HTML, we extract plain text and throw away everything else.
 
 ```python
 from pathlib import Path
@@ -329,9 +316,9 @@ def parse_html_text_only(html_path: Path) -> str:
     return soup.get_text(separator=" ", strip=True)
 ```
 
-#### pdf
+#### PDF
 
-we use `pypdf` for simple text extraction
+For PDFs, let's try two approaches. The simple one uses `pypdf` for basic text extraction:
 
 ```python
 from pathlib import Path
@@ -350,7 +337,7 @@ def parse_pdf_default(pdf_path: Path) -> str:
     return "\n\n".join(pages)
 ```
 
-MinerU API for pdf to markdown convertion
+The other approach is to use the [MinerU](https://mineru.net) API, which converts PDFs to structured markdown with the help of VLM:
 
 ```python
 import os
@@ -447,9 +434,9 @@ def parse_pdf_mineru(pdf_path: Path) -> str:
         raise
 ```
 
-### chunking
+### Chunking
 
-we use langchain for simple chunking
+Use LangChain's `RecursiveCharacterTextSplitter` for simple chunking:
 
 ```python
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -465,17 +452,125 @@ def chunk_text(text: str, chunk_size: int = 512, chunk_overlap: int = 50) -> lis
     return splitter.split_text(text)
 ```
 
-why this can be tricky?
-- many embedding models have limited input length
-- another reason why the chunk size cannot be too big is that we want the retrieved content to be precise; otherwise, we can just feed the whole content into LLMs and indexing becomes useless
-- chunk overlap is to mitigate the issue that you may cut something in half, but a large overlap will cause redundent content and maybe the top 5 paragraphs you retrieve are overlapping against each other
-- besides breaking continuous content, we may also break the structure; here we totally ignore this and the resulting markdown pieces could be bad
+Choosing chunking hyperparameters is harder than it looks. First of all, embedding models have limited input length, so chunks 
+cannot be too large. But if chunks are too small, they may lack context. Overlap helps avoid cutting things in half, yet too 
+much overlap creates redundancy: your top-5 retrieved chunks might all contain the same sentence. Finally, naive splitting ignores 
+document structure. A chunk that starts in the middle of a table or breaks a heading from its paragraph can be semantically useless. 
+We gloss over these issues here.
 
-### embedding
+### Embedding
+
+For a fair comparison, we use the same model that PixelRAG uses: `Qwen/Qwen3-VL-Embedding-2B`. The implementation below is 
+adapted from PixelRAG's code. It follows the standard recipe for LLM-based embeddings: format each input as a chat message, 
+run it through the model, take the hidden state of the last token, and L2-normalize the result.
+
+```python
+import numpy as np
+import torch
+from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+
+_EMBED_MODEL: tuple | None = None
+_EMBED_MODEL_NAME: str | None = None
+
+
+def _load_embed_model(model_name: str):
+    """Load (and cache) the embedding model + processor."""
+    global _EMBED_MODEL, _EMBED_MODEL_NAME
+    if _EMBED_MODEL is not None and _EMBED_MODEL_NAME == model_name:
+        return _EMBED_MODEL
+
+    if torch.cuda.is_available():
+        device = "cuda"
+        dtype = torch.bfloat16
+    elif torch.backends.mps.is_available():
+        device = "mps"
+        dtype = torch.float16
+    else:
+        device = "cpu"
+        dtype = torch.float32
+    print(f"Loading embedding model: {model_name} ...")
+    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+    model = Qwen3VLForConditionalGeneration.from_pretrained(
+        model_name,
+        trust_remote_code=True,
+        torch_dtype=dtype,
+    )
+    model = model.to(device).eval()
+    _EMBED_MODEL = (model, processor, device)
+    _EMBED_MODEL_NAME = model_name
+    print(f"Model loaded on {device}.")
+    return _EMBED_MODEL
+
+
+def embed_texts(
+    texts: list[str],
+    model_name: str = "Qwen/Qwen3-VL-Embedding-2B",
+    *,
+    instruction: str = "Represent the user's input.",
+) -> np.ndarray:
+    """Embed a list of texts using Qwen3-VL-Embedding (or compatible model)."""
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+
+    model, processor, device = _load_embed_model(model_name)
+
+    messages_batch = [
+        [
+            {"role": "system", "content": [{"type": "text", "text": instruction}]},
+            {"role": "user", "content": [{"type": "text", "text": t}]},
+        ]
+        for t in texts
+    ]
+    prompts = [
+        processor.apply_chat_template(m, tokenize=False, add_generation_prompt=True)
+        for m in messages_batch
+    ]
+
+    inputs = processor(text=prompts, return_tensors="pt", padding=True)
+    inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
+
+    with torch.no_grad():
+        outputs = model.model(**inputs)
+        last_hidden = outputs.last_hidden_state
+        attention_mask = inputs["attention_mask"]
+        last_token_indices = attention_mask.sum(dim=1) - 1
+        pooled = last_hidden[
+            torch.arange(last_hidden.size(0), device=last_hidden.device), last_token_indices
+        ]
+        pooled = torch.nn.functional.normalize(pooled, p=2, dim=-1)
+
+    return pooled.cpu().float().numpy()
+```
+
+One practical advantage of LLM-based embedding models is that they accept much longer inputs than traditional embedding models, 
+which often cap context at 512 tokens.
+
+### Index Building
 
 ...
 
 ## Benchmark
+
+### documents
+
+we prepare four groups of documents:
+- html:
+    - https://grayv.com
+- easy-pdf:
+    - https://github.com/py-pdf/pypdf/blob/main/resources/crazyones.pdf
+    - https://github.com/py-pdf/sample-files/blob/main/001-trivial/minimal-document.pdf
+- common-pdf:
+    - https://arxiv.org/pdf/2201.00200
+    - https://arxiv.org/pdf/2201.00214
+- hard-pdf:
+    - https://jefftan969.github.io/dasr/poster.pdf
+    - https://doss.xhby.net/zpaper/xhrb/pc/att/202605/04/2dc24357-0c3c-47a8-88dc-0fb51b881d4b.pdf
+
+### indexing
+
+...
+
+### querying
 
 ...
 
