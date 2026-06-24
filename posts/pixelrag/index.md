@@ -547,30 +547,235 @@ which often cap context at 512 tokens.
 
 ### Index Building
 
-...
+We store embeddings in a FAISS `IndexFlatIP` index. Because the vectors are L2-normalized, inner product equals cosine similarity, 
+which is what both PixelRAG and our baseline use for retrieval. The pipeline below ties together parsing, chunking, embedding, and 
+indexing into one function.
+
+```python
+import os
+import json
+import warnings
+from typing import Literal
+from pathlib import Path
+
+import numpy as np
+import faiss
+
+
+def _collect_documents(
+    folder: Path,
+    pdf_mode: Literal["default", "mineru"] | None = None
+) -> list[dict]:
+    """Walk folder and return list of dicts with keys: source, text."""
+    docs: list[dict] = []
+    files = sorted(p for p in folder.rglob("*") if p.is_file())
+
+    for f in files:
+        suffix = f.suffix.lower()
+        try:
+            if suffix == ".html" or suffix == ".htm":
+                text = parse_html_text_only(f)
+            elif suffix == ".pdf":
+                mode = pdf_mode or "default"
+                if mode == "default":
+                    text = parse_pdf_default(f)
+                else:
+                    text = parse_pdf_mineru(f)
+            else:
+                continue
+
+            if text.strip():
+                docs.append({"source": str(f.relative_to(folder)), "text": text})
+        except Exception as exc:
+            warnings.warn(f"Failed to parse {f}: {exc}")
+
+    return docs
+
+
+def build_index(
+    folder_path: str | Path,
+    output_dir: str | Path,
+    *,
+    embed_model: str = "Qwen/Qwen3-VL-Embedding-2B",
+    pdf_mode: Literal["default", "mineru"] | None = None,
+    chunk_size: int = 512,
+    chunk_overlap: int = 50,
+) -> dict:
+    """Build a FAISS index for documents in folder_path."""
+    folder = Path(folder_path).resolve()
+    if not folder.exists():
+        raise FileNotFoundError(f"Source folder not found: {folder}")
+
+    if isinstance(output_dir, str):
+        output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Parse documents
+    docs = _collect_documents(folder, pdf_mode=pdf_mode)
+    print(f"Parsed {len(docs)} documents.")
+
+    # 2. Chunk
+    chunks: list[dict] = []
+    for doc in docs:
+        for piece in chunk_text(doc["text"], chunk_size=chunk_size, chunk_overlap=chunk_overlap):
+            chunks.append({"source": doc["source"], "text": piece})
+    print(f"Generated {len(chunks)} chunks.")
+
+    if not chunks:
+        raise ValueError("No text chunks produced. Check source folder and parsers.")
+
+    # 3. Embed in batches
+    batch_size = 16  # small batch to keep memory reasonable on MPS/CPU
+    all_embeddings: list[np.ndarray] = []
+    for i in range(0, len(chunks), batch_size):
+        batch_texts = [c["text"] for c in chunks[i : i + batch_size]]
+        embs = embed_texts(batch_texts, embed_model)
+        all_embeddings.append(embs)
+        print(f"  Embedded batch {i // batch_size + 1}/{(len(chunks) - 1) // batch_size + 1}")
+
+    embeddings = np.vstack(all_embeddings)
+    embed_dim = embeddings.shape[1]
+    print(f"Embeddings shape: {embeddings.shape}")
+
+    # 4. Build FAISS index (inner product on L2-normalized vectors = cosine)
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
+    index = faiss.IndexFlatIP(embed_dim)
+    index.add(embeddings)
+
+    # 5. Save
+    faiss.write_index(index, str(output_dir / "index.faiss"))
+    with open(output_dir / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(chunks, f, ensure_ascii=False, indent=2)
+
+    config = {
+        "embed_model": embed_model,
+        "pdf_mode": pdf_mode,
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "num_chunks": len(chunks),
+        "embed_dim": embed_dim,
+    }
+    with open(output_dir / "config.json", "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+
+    print(f"\nIndex saved to {output_dir}")
+    return {
+        "output_dir": str(output_dir),
+        "num_chunks": len(chunks),
+        "embed_dim": embed_dim,
+    }
+```
 
 ## Benchmark
 
-### documents
+These two approaches should behave differently depending on the document. We test four document groups, ranging from simple 
+HTML to complex PDFs.
 
-we prepare four groups of documents:
-- html:
-    - https://grayv.com
-- easy-pdf:
-    - https://github.com/py-pdf/pypdf/blob/main/resources/crazyones.pdf
-    - https://github.com/py-pdf/sample-files/blob/main/001-trivial/minimal-document.pdf
-- common-pdf:
-    - https://arxiv.org/pdf/2201.00200
-    - https://arxiv.org/pdf/2201.00214
-- hard-pdf:
-    - https://jefftan969.github.io/dasr/poster.pdf
-    - https://doss.xhby.net/zpaper/xhrb/pc/att/202605/04/2dc24357-0c3c-47a8-88dc-0fb51b881d4b.pdf
+> [!NOTE]
+> This is a small-scale comparison, not a comprehensive benchmark. The goal is to observe qualitative differences rather 
+> than prove quantitative superiority.
 
-### indexing
+We evaluate **indexing cost**, **querying quality**, and **answer-generation token cost**. All answer generation uses 
+[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B).
+
+### HTML
+
+A simple page with very little text: https://grayv.com
+
+**Questions:**
+- How many times does "9.00pm" appear?
+- Who is at Bowery Ballroom?
+
+#### Indexing
+
+| Approach | Chunks (Vectors) | Index File | Total Directory |
+|----------|------------------|------------|-----------------|
+| PixelRAG | 8 | 74 KB | 3.8 MB |
+| RAG | 2 | 16 KB | 28 KB |
+
+On indexing cost, PixelRAG loses here. The HTML renders into a long image that is sliced into 8 tiles, 3 of which are blank 
+but still take ~5 KB each. The content is so sparse that the 8 images carry little semantic information. Content splitting 
+across tiles also persists: text chunking problems reappear as image chunking problems.
+
+#### Querying
 
 ...
 
-### querying
+### Simple PDF
+
+Two small PDFs with plain text and simple layout.
+
+- https://github.com/py-pdf/pypdf/blob/main/resources/crazyones.pdf
+- https://github.com/py-pdf/sample-files/blob/main/001-trivial/minimal-document.pdf
+
+**Questions:**
+- Are the crazy ones bad?
+- What are the real Latin words?
+
+#### Indexing
+
+| Approach | Chunks (Vectors) | Index File | Total Directory |
+|----------|------------------|------------|-----------------|
+| PixelRAG | 2 | 25 KB | 396 KB |
+| RAG (Default) | 4 | 32 KB | 44 KB |
+| RAG (MinerU) | 4 | 32 KB | 44 KB |
+
+As documents grow slightly more text-dense, PixelRAG now produces fewer vectors than the text baselines.
+
+#### Querying
+
+...
+
+### Common PDF
+
+Two arXiv papers with text, equations, figures, and standard multi-page layout.
+
+- https://arxiv.org/pdf/2201.00200
+- https://arxiv.org/pdf/2201.00214
+
+**Questions:**
+- Why are the evolutionary models self-consistent?
+- In the histogram of the temperature-period percentages for the loops’ strips of the ﬂaring and non-ﬂaring ARs, what is the main temperature period for non-ﬂaring ARs?
+
+#### Indexing
+
+| Approach | Chunks (Vectors) | Index File | Total Directory |
+|----------|------------------|------------|-----------------|
+| PixelRAG | 29 | 246 KB | 15 MB |
+| RAG (Default) | 199 | 1.6 MB | 1.7 MB |
+| RAG (MinerU) | 253 | 2.1 MB | 2.1 MB |
+
+At this scale, PixelRAG's vector count is far lower: a single page becomes one vector, whereas text chunking explodes into 
+hundreds. The trade-off is storage: 15 MB of images versus ~0.1 MB of text.
+
+#### Querying
+
+...
+
+### Complex PDF
+
+A dense CVPR poster and a newspaper page. Both are single-page PDFs with complex visual layout.
+
+- https://jefftan969.github.io/dasr/poster.pdf
+- https://doss.xhby.net/zpaper/xhrb/pc/att/202605/04/2dc24357-0c3c-47a8-88dc-0fb51b881d4b.pdf
+
+**Questions:**
+- Is BANMo the slowest method?
+- What is the name of the reporter who took the picture of "苏超有面"?
+
+#### Indexing
+
+| Approach | Chunks (Vectors) | Index File | Total Directory |
+|----------|------------------|------------|-----------------|
+| PixelRAG | 2 | 25 KB | 11 MB |
+| RAG (Default) | 22 | 180 KB | 208 KB |
+| RAG (MinerU) | 27 | 221 KB | 248 KB |
+
+PixelRAG stores 11 MB for just 2 chunks because the source PDFs render to very large images. The newspaper page in particular 
+becomes a 16800 x 8400 px image that compresses poorly to JPEG; PIL even emitted a `DecompressionBombWarning` during rendering.
+
+#### Querying
 
 ...
 
