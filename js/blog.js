@@ -38,6 +38,12 @@ const POSTS_DIRECTORY = '/posts/';
 // List of posts - add your posts here
 const posts = [
     {
+        slug: 'pixelrag',
+        title: 'PixelRAG: How Does Image-Based Retrieval Compare to Text RAG?',
+        date: '2026-06-25',
+        tags: ['RAG', 'embedding', 'VLM']
+    },
+    {
         slug: 'shadowrocket',
         title: 'Setting Up a Shared Proxy with Shadowrocket',
         date: '2026-05-20',

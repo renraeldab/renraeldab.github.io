@@ -1,7 +1,7 @@
 ---
 title: "PixelRAG: How Does Image-Based Retrieval Compare to Text RAG?"
 date: "2026-06-25"
-tags: ["RAG", "embedding"]
+tags: ["RAG", "embedding", "VLM"]
 ---
 
 [PixelRAG](https://github.com/StarTrail-org/PixelRAG) is a project that renders documents as screenshots and retrieves over 
@@ -677,15 +677,11 @@ HTML to complex PDFs.
 > than prove quantitative superiority.
 
 We evaluate **indexing cost**, **querying quality**, and **answer-generation token cost**. All answer generation uses 
-[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B).
+[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B), and `top_k=3`.
 
 ### HTML
 
 A simple page with very little text: https://grayv.com
-
-**Questions:**
-- How many times does "9.00pm" appear?
-- Who is at Bowery Ballroom?
 
 #### Indexing
 
@@ -700,7 +696,22 @@ across tiles also persists: text chunking problems reappear as image chunking pr
 
 #### Querying
 
-...
+**How many times does "9.00pm" appear?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | No | Three chunks together can yield the correct answer, but only one is retrieved | 2656 |
+| RAG | Yes | Duplicate chunks from overlap confused the model, leading to wrong reasoning | 457 |
+
+**Who is at Bowery Ballroom?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 2651 |
+| RAG | Yes | - | 452 |
+
+This HTML page is a poor fit for PixelRAG. For simple documents and purely text-based questions, image indexing is expensive 
+and underperforms: it misses chunks that text splitting captures easily, and the prompt token cost is nearly 6× higher.
 
 ### Simple PDF
 
@@ -708,10 +719,6 @@ Two small PDFs with plain text and simple layout.
 
 - https://github.com/py-pdf/pypdf/blob/main/resources/crazyones.pdf
 - https://github.com/py-pdf/sample-files/blob/main/001-trivial/minimal-document.pdf
-
-**Questions:**
-- Are the crazy ones bad?
-- What are the real Latin words?
 
 #### Indexing
 
@@ -725,7 +732,24 @@ As documents grow slightly more text-dense, PixelRAG now produces fewer vectors 
 
 #### Querying
 
-...
+**Are the crazy ones bad?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 5083 |
+| RAG (Default) | Yes | - | 345 |
+| RAG (MinerU) | Yes | - | 340 |
+
+**What are the real Latin words?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 5084 |
+| RAG (Default) | Yes | - | 392 |
+| RAG (MinerU) | Yes | - | 386 |
+
+All three approaches retrieve the correct chunks, but PixelRAG costs an order of magnitude more in prompt tokens because 
+each chunk is a full image.
 
 ### Common PDF
 
@@ -733,10 +757,6 @@ Two arXiv papers with text, equations, figures, and standard multi-page layout.
 
 - https://arxiv.org/pdf/2201.00200
 - https://arxiv.org/pdf/2201.00214
-
-**Questions:**
-- Why are the evolutionary models self-consistent?
-- In the histogram of the temperature-period percentages for the loops’ strips of the ﬂaring and non-ﬂaring ARs, what is the main temperature period for non-ﬂaring ARs?
 
 #### Indexing
 
@@ -751,7 +771,27 @@ hundreds. The trade-off is storage: 15 MB of images versus ~0.1 MB of text.
 
 #### Querying
 
-...
+**Why are the evolutionary models self-consistent?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 7620 |
+| RAG (Default) | No | Poor parsing produced incomplete content even after chunk overlap | 470 |
+| RAG (MinerU) | Yes | - | 245 |
+
+**In the histogram of the temperature-period percentages for the loops’ strips of the ﬂaring and non-ﬂaring ARs, what is the main temperature period for non-ﬂaring ARs?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 7621 |
+| RAG (Default) | No | The answer is in a figure, which text-based indexing ignores | 671 |
+| RAG (MinerU) | Yes | The correct figure is located, but the answer cannot be inferred from markdown image placeholder text | 375 |
+
+This is where PixelRAG starts to shine. On documents with figures, equations, and dense layout, retrieving whole pages as images 
+preserves visual context that text parsing loses. The trade-off is still token cost.
+
+One secondary finding is that MinerU becomes valuable for traditional RAG as documents grow complex. It produced better retrieval 
+and lower token costs than default PDF parsing on both questions.
 
 ### Complex PDF
 
@@ -759,10 +799,6 @@ A dense CVPR poster and a newspaper page. Both are single-page PDFs with complex
 
 - https://jefftan969.github.io/dasr/poster.pdf
 - https://doss.xhby.net/zpaper/xhrb/pc/att/202605/04/2dc24357-0c3c-47a8-88dc-0fb51b881d4b.pdf
-
-**Questions:**
-- Is BANMo the slowest method?
-- What is the name of the reporter who took the picture of "苏超有面"?
 
 #### Indexing
 
@@ -777,8 +813,83 @@ becomes a 16800 x 8400 px image that compresses poorly to JPEG; PIL even emitted
 
 #### Querying
 
-...
+**Is BANMo the slowest method?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | - | 4625 |
+| RAG (Default) | No | No decisive information is retrieved | 556 |
+| RAG (MinerU) | No | The markdown table is split across chunks, so only a partial table is retrieved | 702 |
+
+**What is the name of the reporter who took the picture of "苏超有面"?**
+
+| Approach | Necessary Chunks Retrieved? | Failure Reason | Prompt Tokens |
+|----------|-----------------------------|----------------|---------------|
+| PixelRAG | Yes | The model failed to read the correct answer from the compressed image | 4635 |
+| RAG (Default) | No | Retrieved information was insufficient because of poor parsing and chunking | 831 |
+| RAG (MinerU) | Yes | - | 1057 |
+
+On the poster, PixelRAG demonstrates its main strength: there is no struggle with parsing tables or tuning chunk size. A single 
+rendered page carries the full layout, and retrieval succeeds where text-based methods return nothing or fragmented tables.
+
+The newspaper page tells a different story. When an entire dense page becomes one high-resolution image, you face a hard choice: 
+compress the image and lose fine details, or keep the resolution and pay even more tokens, with no guarantee that the VLM can 
+find the details. Text-based RAG does not have this problem — once MinerU parses the layout correctly, it can retrieve the exact 
+text at a fraction of the token cost.
 
 ## Discussion
 
-...
+### How We Got Here
+
+RAG emerged because early language models were expensive and had limited context windows. A whole industry of tricks grew around 
+the idea of feeding models only the most relevant snippets. Three areas have evolved dramatically since then.
+
+**Parsing.** The traditional approach pipelined CV models for layout detection and OCR. Today, VLMs, like the one behind MinerU, 
+do the same job with higher accuracy at higher cost.
+
+**Embedding.** LLM-based embedding models now swallow far longer inputs than the 512-token caps of traditional embedders. Multimodal 
+embeddings, the foundation of PixelRAG, are also practical now.
+
+**Generation.** Perhaps the biggest shift is that LLMs are now cheap enough, and context windows large enough, that "just dump 
+everything" is no longer absurd. PixelRAG pushes this logic one step further: instead of using a VLM at indexing time to parse 
+and structure documents, it moves the VLM to query time, reading abundant information from images, and skips parsing entirely. 
+The cost shifts from indexing to querying.
+
+### When to Use Which
+
+#### Quality
+
+Based on the tests above, the answer to "which is better?" is firmly "it depends":
+
+- **Simple text, clean layout**: Text-based RAG wins. PixelRAG costs more with no quality gain.
+- **Complex layout with figures and tables**: PixelRAG wins. It preserves visual structure that text parsing destroys.
+- **Extremely dense, high-resolution pages**: Text-based RAG wins again. The problem of "not enough context window" reappears in image form.
+
+#### Cost
+
+**Indexing**
+
+PixelRAG skips parsing entirely, so there are no chunk size or overlap parameters to tune. For complex documents, its vector 
+count is often much smaller than text-based RAG because one page equals one vector. The trade-off is storage: image tiles are 
+always larger than the text they replace.
+
+**Querying**
+
+In our experiments, PixelRAG always used significantly more prompt tokens per query because each retrieved chunk is a full image, 
+while the retrieved text is short (this may change if you have to increase `top_k` to hit the right text chunk). Retrieval itself 
+is cheaper with a smaller index, but that is negligible compared to generation cost. If you query frequently, the token premium adds up fast.
+
+**Overall**
+
+PixelRAG makes sense when you index many documents but query them infrequently. The savings at indexing time eventually pay 
+for the expensive queries. If your workload is query-heavy, text-based RAG is cheaper in the long run.
+
+#### Other Considerations
+
+Similarity scores differ in scale. Traditional RAG often returns chunks above 0.8 cosine similarity; PixelRAG rarely exceeds 0.6. 
+If your application surfaces scores to users, expect to explain the difference or hide them entirely.
+
+Retrieval latency is another factor. A smaller index can mean faster nearest-neighbor search, so if your text-based index has grown 
+unwieldy, PixelRAG's compact vector count may help.
+
+Ultimately, the choice depends on your documents, your query pattern, and what failure mode you would rather manage.
