@@ -4,6 +4,8 @@ date: 2026-07-25
 tags: ["terminal", "shell", "cli", "beginner"]
 ---
 
+This post explains the difference between a terminal, a shell, and a CLI; why the same command can behave differently on different operating systems; and how a script file becomes a command you can run by name.
+
 ## A Brief History: CLI, GUI, and the Comeback
 
 In the 1960s and 1970s, the command-line interface (CLI) was the only way to interact with a computer. Operators typed commands into teletypes — literally typewriters wired to mainframes — and read the printed output. There were no windows, icons, or menus.
@@ -73,13 +75,31 @@ for step in track(range(100), description="Processing..."):
 
 Both programs run inside the same terminal emulator and shell. The difference is what the program emits: plain text versus escape sequences that manipulate the terminal screen.
 
+## Making a Script Into a Command
+
+When you type `ls`, the shell finds a compiled executable and runs it. But you can also turn a text file into a command. On macOS and Linux, a script needs two things.
+
+First, the file must begin with a **shebang** line that tells the shell which interpreter to use:
+
+```python
+#!/usr/bin/env python3
+name = input("Enter your name: ")
+print(f"Hello, {name}")
+```
+
+Second, the file needs the **executable permission**. You grant it with `chmod +x hello.py`. Once the file is executable and located in a directory listed in your `PATH`, you can type `hello.py` and the shell will run it like any other command.
+
+Notice that the command name includes the `.py` extension only because the file is named that way. On Unix-like systems, the shell does not require an extension. You can rename the file to plain `hello` (no extension) and run it with `hello` as long as the shebang line is still inside. This is why commands you install via npm or Homebrew appear as clean names like `eslint` or `fzf` rather than `eslint.js` or `fzf.rb`. Package managers typically place a small wrapper script or a symlink with a clean name into a directory on your `PATH`, while the actual implementation files live elsewhere.
+
+This mechanism does not work on Windows. Windows decides how to run a file by its extension (`.py`, `.bat`, `.exe`) and does not use the shebang line or the executable permission bit. On Windows, you typically run a Python script by typing `python hello.py` or rely on file associations rather than making the script itself a standalone command.
+
+This is why setup instructions for command-line tools often look different across operating systems: the Unix world expects a script to become a first-class command, while Windows handles the same task through different conventions.
+
 ## Summary
 
-| Term | What it is | Example |
-|------|-----------|---------|
-| Terminal Emulator | The GUI app that renders text and handles input | Terminal.app, iTerm2, Ghostty, Windows Terminal |
-| Shell | The command interpreter that translates text into system calls | Bash, Zsh, Fish, PowerShell |
-| CLI | The interface pattern: text in, text out | — |
-| TUI | A CLI program that manipulates the terminal screen via escape sequences | Claude Code, HTOP, Vim |
-
-The next time a tool asks you to install a new terminal, or you wonder why an image paste behaves differently across operating systems, you will know to look at the terminal emulator layer — not the shell, and not the CLI pattern itself.
+- A **terminal emulator** is the application window that renders text and captures keystrokes. It is not the same as the shell.
+- A **shell** is the interpreter that reads what you type, parses it, and runs programs. You can swap shells without changing terminal emulators.
+- **CLI** is the interface pattern itself — text commands in, text output out — not a specific program.
+- Terminal emulators differ in capabilities. Rich agent apps and TUIs need modern terminals that support advanced escape sequences and fast rendering.
+- A **TUI** differs from a simple CLI program by using escape sequences to manipulate the screen — colors, tables, and live updates — rather than just streaming plain text.
+- On Unix-like systems, a script becomes a command through a shebang line, executable permissions, and placement on the `PATH`. Windows uses file extensions and associations instead, which is why the same tool often has different setup instructions per operating system.

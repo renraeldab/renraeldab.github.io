@@ -38,6 +38,12 @@ const POSTS_DIRECTORY = '/posts/';
 // List of posts - add your posts here
 const posts = [
     {
+        slug: 'terminal',
+        title: 'Terminal, Shell, CLI, and TUI: What Is What',
+        date: '2026-07-25',
+        tags: ['terminal', 'shell', 'cli', 'beginner']
+    },
+    {
         slug: 'pixelrag',
         title: 'PixelRAG: How Does Image-Based Retrieval Compare to Text RAG?',
         date: '2026-06-25',
