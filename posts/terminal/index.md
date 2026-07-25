@@ -4,17 +4,13 @@ date: 2026-07-25
 tags: ["terminal", "shell", "cli", "beginner"]
 ---
 
-I open Terminal.app on my Mac, type commands in what I casually call "the terminal," and occasionally write Python scripts that read from `stdin` and print to `stdout`. When an AI agent CLI tool suggests I install Ghostty, I do it — but I am not entirely sure why I need a new terminal when one is already built into my OS. And when I paste an image into the terminal on macOS and nothing useful happens on Windows, I wonder what layer is actually responsible.
-
-If you have similar questions, you are not alone. The terminology is genuinely confusing because the terms are used interchangeably in everyday conversation, but they refer to distinct layers of the stack. Let us clear them up.
-
 ## A Brief History: CLI, GUI, and the Comeback
 
 In the 1960s and 1970s, the command-line interface (CLI) was the only way to interact with a computer. Operators typed commands into teletypes — literally typewriters wired to mainframes — and read the printed output. There were no windows, icons, or menus.
 
 The 1980s and 1990s brought the graphical user interface (GUI) revolution. Macintosh and Windows made computers accessible to non-experts by replacing typed commands with point-and-click interactions. For decades, the GUI was the default interface for mainstream users, while the CLI remained a niche tool for developers and system administrators.
 
-The CLI never disappeared for developers because it is efficient and composable: you can chain small tools together to perform complex tasks. But in the 2020s, the CLI is experiencing a broader comeback. AI agent tools — such as Claude Code, Aider, and Copilot CLI — present themselves as "terminal apps" with rich, interactive interfaces. Newcomers now encounter powerful CLI tools before they understand the stack beneath them, which creates confusion.
+The CLI never disappeared for developers because it is efficient and composable: you can chain small tools together to perform complex tasks. But in the 2020s, the CLI is experiencing a broader comeback. AI agent tools, such as Claude Code and Copilot CLI, present themselves as "terminal apps" with rich, interactive interfaces. Newcomers now encounter powerful CLI tools before they understand the stack beneath them, which creates confusion.
 
 ## The Three Layers
 
@@ -34,10 +30,7 @@ You can change the shell without changing the terminal emulator. On macOS, Termi
 
 ### CLI
 
-CLI is not a program. It is a pattern — an interface style where you communicate with software through text commands and receive text output. Both the terminal emulator and the shell participate in providing a CLI, but neither *is* the CLI. It is the contract between you and the software: text in, text out.
-
-> [!NOTE]
-> **Cheat sheet:** You open a terminal emulator, it runs a shell, and together they give you a CLI.
+CLI is not a program. It is a pattern — an interface style where you communicate with software through text commands and receive text output. Both the terminal emulator and the shell participate in providing a CLI, but neither is the CLI. It is the contract between you and the software: text in, text out.
 
 ## Terminal Emulators Are Not Interchangeable
 
